@@ -1,0 +1,11 @@
+Flask
+Flask-SQLAlchemy
+Flask-Mail
+pdfplumber
+SQLAlchemy
+Werkzeug
+python-dotenv
+psycopg2-binary
+authlib
+google-generativeai
+gunicorn

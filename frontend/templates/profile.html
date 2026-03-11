@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Set Up Profile | Expense Analyzer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center mt-4 mb-5">
+    <div class="col-md-6 col-lg-5">
+        
+        <!-- HEADER GREETING -->
+        <div class="text-center mb-4 animate__animated animate__fadeInDown">
+            <h2 class="fw-bold text-primary">Financial Identity 👤</h2>
+            <p class="text-muted">Configure your base income and goals for AI analysis.</p>
+        </div>
+
+        <!-- GLASS CARD START -->
+        <div class="dashboard-card p-4 shadow-lg border-primary border-opacity-25 animate__animated animate__fadeInUp" 
+             style="backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.1);">
+            
+            <form action="/profile" method="POST" id="profileForm">
+                
+                <!-- FULL NAME -->
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-info text-uppercase">Full Name</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-muted">👤</span>
+                        <input type="text" name="full_name" class="form-control bg-dark text-white border-secondary" 
+                               placeholder="e.g. Smitha" value="{{ user.full_name or '' }}" required>
+                    </div>
+                </div>
+
+                <!-- MONTHLY INCOME -->
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-info text-uppercase">Monthly Income (₹)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-muted">💰</span>
+                        <input type="number" name="income" id="incomeInput" class="form-control bg-dark text-white border-secondary" 
+                               placeholder="0.00" value="{{ user.monthly_income }}" required oninput="calculateBudget()">
+                    </div>
+                </div>
+
+                <!-- SAVINGS GOAL -->
+                <div class="mb-4">
+                    <label class="form-label small fw-bold text-info text-uppercase">Monthly Savings Goal (₹)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-muted">🎯</span>
+                        <input type="number" name="goal" id="goalInput" class="form-control bg-dark text-white border-secondary" 
+                               placeholder="0.00" value="{{ user.savings_goal }}" required oninput="calculateBudget()">
+                    </div>
+                </div>
+
+                <!-- 💡 LIVE AI FEEDBACK (INTERACTIVE FEATURE) -->
+                <div class="p-3 rounded-4 mb-4" id="budgetPreview" 
+                     style="background: rgba(59, 130, 246, 0.1); border: 1px dashed #3b82f6; display: none;">
+                    <small class="text-muted d-block mb-1">Interactive Budget Insight:</small>
+                    <p class="mb-0 fw-bold text-white">
+                        Your monthly spending budget will be <span class="text-success" id="spendLimit">₹0</span>.
+                    </p>
+                    <small class="text-muted mt-1 d-block" id="goalAdvice"></small>
+                </div>
+
+                <!-- SAVE BUTTON -->
+                <button type="submit" class="btn btn-grad-primary w-100 py-3 fw-bold rounded-3 shadow">
+                    Save Profile & Start Analyzing 🚀
+                </button>
+            </form>
+        </div>
+        <!-- GLASS CARD END -->
+
+    </div>
+</div>
+
+<script>
+    // --- LIVE INTERACTIVE CALCULATION ---
+    function calculateBudget() {
+        const income = parseFloat(document.getElementById('incomeInput').value) || 0;
+        const goal = parseFloat(document.getElementById('goalInput').value) || 0;
+        const preview = document.getElementById('budgetPreview');
+        const spendLimit = document.getElementById('spendLimit');
+        const advice = document.getElementById('goalAdvice');
+
+        if (income > 0) {
+            preview.style.display = 'block';
+            const limit = income - goal;
+            spendLimit.innerText = "₹" + limit.toLocaleString();
+
+            if (goal > (income * 0.5)) {
+                advice.innerText = "⚠️ That's a high savings goal! You'll need to be very strict.";
+                advice.className = "text-warning small mt-1 d-block";
+            } else if (goal > 0) {
+                advice.innerText = "✅ This looks like a realistic goal. Let's hit it!";
+                advice.className = "text-info small mt-1 d-block";
+            }
+        } else {
+            preview.style.display = 'none';
+        }
+    }
+
+    // Run on load if values exist
+    window.onload = calculateBudget;
+</script>
+
+<style>
+    /* Profile Specific Animations */
+    .dashboard-card {
+        transition: transform 0.3s ease;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+    }
+    .input-group-text {
+        font-size: 1.2rem;
+    }
+    .form-control:focus {
+        background: #0f172a !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+    }
+</style>
+{% endblock %}

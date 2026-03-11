@@ -1,0 +1,159 @@
+# 🚀 How to Run — Expense Analyzer
+# Last Updated: 2026-03-09
+# ─────────────────────────────────────────────────────────────────────────────
+# Tech Stack:
+#   Backend  : Flask (Python 3.10+), SQLAlchemy, Flask-Mail, pdfplumber,
+#               Google Generative AI (Gemini), Authlib (Google OAuth)
+#   Database : PostgreSQL (NeonDB hosted) or SQLite (auto-fallback)
+#   Frontend : Jinja2 HTML Templates (in /frontend/templates/)
+#   Static   : CSS/JS/Uploads (in /frontend/static/)
+# ─────────────────────────────────────────────────────────────────────────────
+
+================================================================================
+  OPTION 1 — LOCAL SETUP (Python venv) ✅ RECOMMENDED & TESTED
+================================================================================
+
+PREREQUISITES:
+  • Python 3.10+ installed (https://www.python.org/downloads/)
+  • Git (optional, if cloning)
+  • Internet access (for NeonDB PostgreSQL connection & AI features)
+
+STEP 1 — Navigate to the project root:
+  cd expenses-tracker-new-main
+
+STEP 2 — Navigate to backend and activate the existing virtual environment:
+  cd backend
+
+  # Windows (PowerShell / CMD):
+  .\venv\Scripts\activate
+
+  # Linux / macOS:
+  source venv/bin/activate
+
+  NOTE: If the venv folder doesn't exist yet, create it first:
+    python -m venv venv
+    .\venv\Scripts\activate          # Windows
+    pip install -r requirements.txt  # install dependencies
+
+STEP 3 — Return to project root:
+  cd ..                   # back to expenses-tracker-new-main/
+
+STEP 4 — Verify the .env file exists in the project root:
+  • File location  : expenses-tracker-new-main/.env
+  • Required keys  :
+      SECRET_KEY
+      DATABASE_URL          (PostgreSQL NeonDB connection string)
+      MAIL_USERNAME         (Gmail address)
+      MAIL_PASSWORD         (Gmail App Password)
+      GOOGLE_API_KEY        (Gemini AI key)
+      GOOGLE_CLIENT_ID      (OAuth 2.0 Client ID)
+      GOOGLE_CLIENT_SECRET  (OAuth 2.0 Client Secret)
+      MICRO_PERCENT=50
+      SAFE_PERCENT=30
+      GROWTH_PERCENT=20
+
+STEP 5 — Run the application (from project root):
+
+  # Using the venv Python directly (MOST RELIABLE — no activation needed):
+  backend\venv\Scripts\python.exe backend\run_app.py
+
+  # OR if venv is already activated:
+  python backend\run_app.py
+
+STEP 6 — Open the app in your browser:
+  http://localhost:5000   OR   http://127.0.0.1:5000
+
+  Debugger PIN (shown in terminal) — needed only if you hit a debug breakpoint.
+
+================================================================================
+  OPTION 2 — DOCKER SETUP 🐳
+================================================================================
+
+PREREQUISITES:
+  • Docker Desktop installed and running
+
+STEP 1 — From the project root, build and start containers:
+  docker-compose -f backend/docker-compose.yml up --build
+
+STEP 2 — Open the app:
+  http://localhost:5000
+
+STEP 3 — Stop containers:
+  docker-compose -f backend/docker-compose.yml down
+
+================================================================================
+  TESTING ACCOUNT
+================================================================================
+
+  Run this ONCE to create a default test user (from project root):
+    backend\venv\Scripts\python.exe backend\scripts\create_test_user.py
+
+  Login credentials:
+    Email    : test@example.com
+    Password : password123
+
+================================================================================
+  PROJECT STRUCTURE (Quick Reference)
+================================================================================
+
+  expenses-tracker-new-main/
+  ├── .env                         ← Environment variables (API keys, DB URL)
+  ├── how-to-run.txt               ← This file
+  ├── backend/
+  │   ├── run_app.py               ← ✅ Entry point — run this to start the app
+  │   ├── __init__.py              ← Flask app factory + blueprint registration
+  │   ├── config.py                ← App configuration (reads from .env)
+  │   ├── extensions.py            ← Flask extensions (db, mail, oauth)
+  │   ├── models.py                ← SQLAlchemy database models
+  │   ├── utils.py                 ← AI (Gemini), PDF parsing, helper functions
+  │   ├── requirements.txt         ← Python dependencies
+  │   ├── routes/
+  │   │   ├── auth.py              ← Login, signup, Google OAuth, email verify
+  │   │   ├── main.py              ← Dashboard, profile routes
+  │   │   ├── transactions.py      ← Add/edit/delete transactions, PDF upload
+  │   │   └── savings.py          ← Smart savings recommendations (AI)
+  │   ├── scripts/                 ← Utility/test scripts
+  │   ├── venv/                    ← Virtual environment (do not commit)
+  │   ├── Dockerfile
+  │   └── docker-compose.yml
+  └── frontend/
+      ├── templates/               ← Jinja2 HTML templates
+      │   ├── base.html            ← Shared layout + nav
+      │   ├── index.html           ← Dashboard (KPI cards, charts, AI report)
+      │   ├── login.html / signup.html / verify.html
+      │   ├── manual.html          ← Manual expense entry
+      │   ├── parser.html          ← PDF/receipt upload & parse
+      │   ├── receipts.html        ← Receipt history
+      │   ├── savings.html         ← Smart Savings recommendations
+      │   └── profile.html         ← User profile & settings
+      └── static/
+          └── uploads/             ← Uploaded receipts/PDFs (auto-created)
+
+================================================================================
+  KNOWN WARNINGS (safe to ignore)
+================================================================================
+
+  1. FutureWarning: google.generativeai — The `google.generativeai` package is
+     deprecated but still functional. App runs normally. To silence:
+     upgrade to `google-genai` package in a future update.
+
+  2. FutureWarning: Python 3.10 — Google APIs will drop Python 3.10 support
+     after Oct 2026. Consider upgrading to Python 3.11+ eventually.
+
+================================================================================
+  TROUBLESHOOTING
+================================================================================
+
+  ❌ "ModuleNotFoundError" — Run from the project ROOT, not from /backend/.
+     Use: backend\venv\Scripts\python.exe backend\run_app.py
+
+  ❌ Database connection error — Check DATABASE_URL in .env is correct and
+     that you have internet access (NeonDB is cloud-hosted).
+
+  ❌ Port 5000 already in use — Kill the existing process or change port:
+     app.run(debug=True, port=5001)  in backend/run_app.py
+
+  ❌ Google OAuth not working — Add http://localhost:5000/auth/callback to
+     your Google Cloud Console → OAuth 2.0 → Authorized Redirect URIs.
+
+  ❌ AI features not working — Verify GOOGLE_API_KEY is valid in .env.

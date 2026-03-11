@@ -1,0 +1,592 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv() # Load variables from .env file
+
+import csv
+import io
+import re
+import pdfplumber
+import calendar
+import random
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, session, flash, make_response
+from flask_sqlalchemy import SQLAlchemy
+from flask_mail import Mail, Message
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from authlib.integrations.flask_client import OAuth
+import requests
+from sqlalchemy import func
+
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
+
+# --- 1. CONFIGURATIONS ---
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(BASE_DIR, 'expense_oracle_master.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'static', 'uploads')
+
+# --- FIXED EMAIL CONFIG (Port 587 with TLS is more stable) ---
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+mail = Mail(app)
+
+# --- GOOGLE OAUTH CONFIG ---
+oauth = OAuth(app)
+google = oauth.register(
+    name='google',
+    client_id=os.getenv('GOOGLE_CLIENT_ID'),
+    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    access_token_params=None,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    authorize_params=None,
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',  # This is for later
+    client_kwargs={'scope': 'openid email profile'},
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
+)
+
+db = SQLAlchemy(app)
+
+# --- 2. MODELS ---
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(255))
+    full_name = db.Column(db.String(100))
+    monthly_income = db.Column(db.Float, default=0.0)
+    savings_goal = db.Column(db.Float, default=0.0)
+    expenses = db.relationship('Expense', backref='owner', lazy=True)
+
+class Expense(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(255))
+    amount = db.Column(db.Float)
+    category = db.Column(db.String(50))
+    type = db.Column(db.String(20), default="Paid") 
+    attachment = db.Column(db.String(255), nullable=True) 
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    is_parsed = db.Column(db.Boolean, default=False)
+    include_in_total = db.Column(db.Boolean, default=True)
+
+class MonthlySummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    year = db.Column(db.Integer)
+    month = db.Column(db.Integer)
+    income = db.Column(db.Float, default=0.0)
+    expenses = db.Column(db.Float, default=0.0)
+    savings = db.Column(db.Float, default=0.0)
+    goal_status = db.Column(db.String(20), default="PENDING") # PENDING, ACHIEVED, NOT_ACHIEVED
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+CATS = ['Food & Drinks', 'Travel', 'Bills & Utilities', 'Shopping', 'Health', 'Education', 'Groceries', 'Investments', 'Others']
+
+# --- 3. AUTH ROUTES ---
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        email = request.form.get('email')
+        password = request.form.get('password')
+
+        if User.query.filter_by(username=email).first():
+            flash('Email already registered!', 'danger')
+            return redirect('/signup')
+
+        otp = str(random.randint(1000, 9999))
+        session['otp'] = otp
+        session['temp_user'] = {
+            'name': name, 'email': email, 
+            'password': generate_password_hash(password)
+        }
+
+        # Send Mail with Detailed Logging
+        try:
+            msg = Message('Expense Analyzer OTP', sender=app.config['MAIL_USERNAME'], recipients=[email])
+            msg.body = f"Hi {name}, unga verification OTP: {otp}"
+            mail.send(msg)
+            print(f"DEBUG: OTP {otp} sent successfully to {email}")
+            flash('OTP sent to your email!', 'info')
+            return redirect('/verify')
+        except Exception as e:
+            print(f"CRITICAL MAIL ERROR: {str(e)}") # Terminal-la error kaatum
+            flash(f"Mail Error: Sariyaana App Password kudungala-nu check pannunga!", 'danger')
+            return redirect('/signup')
+    return render_template('signup.html')
+
+@app.route('/verify', methods=['GET', 'POST'])
+def verify():
+    if 'temp_user' not in session: return redirect('/signup')
+    if request.method == 'POST':
+        if request.form.get('otp') == session.get('otp'):
+            data = session.get('temp_user')
+            new_user = User(full_name=data['name'], username=data['email'], password=data['password'])
+            db.session.add(new_user)
+            db.session.commit()
+            session.pop('otp', None); session.pop('temp_user', None)
+            flash('Registration Success! Login now.', 'success')
+            return redirect('/login')
+        else:
+            flash('Invalid OTP!', 'danger')
+    return render_template('verify.html', email=session['temp_user']['email'])
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = User.query.filter_by(username=request.form.get('email')).first()
+        if user and check_password_hash(user.password, request.form.get('password')):
+            session['user_id'] = user.id
+            session['user_name'] = user.full_name
+            return redirect('/')
+        flash('Invalid Credentials!', 'danger')
+    return render_template('login.html')
+
+# --- 3.5 MONTHLY LOGIC ---
+def calculateMonthlySummary(user_id, year, month):
+    user = User.query.get(user_id)
+    if not user: return None
+
+    # Filter expenses for exact month
+    # We use func.extract for sqlite
+    total_paid = db.session.query(func.sum(Expense.amount)).filter(
+        Expense.user_id == user_id,
+        Expense.type == 'Paid',
+        Expense.include_in_total == True,
+        func.extract('year', Expense.date) == year,
+        func.extract('month', Expense.date) == month
+    ).scalar() or 0
+
+    total_received = db.session.query(func.sum(Expense.amount)).filter(
+        Expense.user_id == user_id,
+        Expense.type == 'Received',
+        Expense.include_in_total == True,
+        func.extract('year', Expense.date) == year,
+        func.extract('month', Expense.date) == month
+    ).scalar() or 0
+
+    monthly_income = user.monthly_income + total_received
+    monthly_savings = monthly_income - total_paid
+
+    summary = MonthlySummary.query.filter_by(user_id=user_id, year=year, month=month).first()
+    if not summary:
+        summary = MonthlySummary(user_id=user_id, year=year, month=month)
+        db.session.add(summary)
+
+    summary.income = monthly_income
+    summary.expenses = total_paid
+    summary.savings = monthly_savings
+
+    # Check evaluation condition
+    now = datetime.utcnow()
+    last_day = calendar.monthrange(year, month)[1]
+    month_end_date = datetime(year, month, last_day, 23, 59, 59)
+
+    if now > month_end_date:
+        if monthly_savings >= user.savings_goal:
+            summary.goal_status = "ACHIEVED"
+        else:
+            summary.goal_status = "NOT_ACHIEVED"
+    else:
+        summary.goal_status = "PENDING"
+
+    db.session.commit()
+    return summary
+
+def runMonthlyEvaluation(user_id):
+    # Check current and previous month
+    now = datetime.utcnow()
+    calculateMonthlySummary(user_id, now.year, now.month)
+    
+    # Check previous month if it's the start of a month
+    prev = now.replace(day=1) - timedelta(days=1)
+    calculateMonthlySummary(user_id, prev.year, prev.month)
+
+# --- 3.7 GOOGLE OAUTH ROUTES ---
+@app.route('/login/google')
+def google_login():
+    redirect_uri = url_for('google_authorize', _external=True)
+    return google.authorize_redirect(redirect_uri)
+
+@app.route('/login/google/authorize')
+def google_authorize():
+    token = google.authorize_access_token()
+    user_info = google.get('userinfo').json()
+    email = user_info['email']
+    name = user_info['name']
+
+    user = User.query.filter_by(username=email).first()
+    if not user:
+        # Create user if not exists
+        user = User(username=email, full_name=name)
+        db.session.add(user)
+        db.session.commit()
+    
+    session['user_id'] = user.id
+    session['user_name'] = user.full_name
+    return redirect('/')
+
+# --- 4. MAIN PAGES ---
+@app.route('/')
+def index():
+    if 'user_id' not in session: return redirect('/login')
+    user = User.query.get(session['user_id'])
+    if not user.full_name or user.monthly_income == 0: return redirect('/profile')
+    
+    # Trigger Evaluation
+    runMonthlyEvaluation(user.id)
+    
+    # Get Current Month Summary
+    now = datetime.utcnow()
+    current_summary = MonthlySummary.query.filter_by(user_id=user.id, year=now.year, month=now.month).first()
+    
+    # Get Past Summaries
+    past_summaries = MonthlySummary.query.filter(
+        MonthlySummary.user_id == user.id,
+        db.or_(MonthlySummary.year < now.year, db.and_(MonthlySummary.year == now.year, MonthlySummary.month < now.month))
+    ).order_by(MonthlySummary.year.desc(), MonthlySummary.month.desc()).all()
+
+    total_paid = current_summary.expenses if current_summary else 0
+    total_received = db.session.query(func.sum(Expense.amount)).filter_by(user_id=user.id, type='Received', include_in_total=True).filter(func.extract('year', Expense.date) == now.year, func.extract('month', Expense.date) == now.month).scalar() or 0
+    balance = current_summary.savings if current_summary else user.monthly_income
+    
+    recent = Expense.query.filter_by(user_id=user.id).order_by(Expense.date.desc()).limit(5).all()
+    
+    # --- Goal Logic ---
+    # Find the most recent completed month's status
+    last_completed = MonthlySummary.query.filter(
+        MonthlySummary.user_id == user.id,
+        MonthlySummary.goal_status != "PENDING"
+    ).order_by(MonthlySummary.year.desc(), MonthlySummary.month.desc()).first()
+
+    # Default: Month in progress logic
+    goal_status = 'pending'
+    rem = user.savings_goal - balance
+    savings_msg = f"Month in progress — Save ₹{rem:,.0f} more to reach your goal! 🚀"
+    
+    # 1. LIVE CHECK: If user ALREADY reached goal this month
+    if balance >= user.savings_goal and user.savings_goal > 0:
+        goal_status = 'achieved'
+        savings_msg = "Live Status: Savings Goal Reached! 🥳 Keep this balance until month-end! 🎯"
+    
+    # 2. OVERRIDE: Record the summary if a past month exists and was successful
+    elif last_completed and last_completed.goal_status == "ACHIEVED":
+        # Keep showing the trophy for the last successful month if current is not yet reached
+        # But we will prioritize the CURRENT month's success if it happens
+        pass 
+
+    progress_percent = 0
+    if user.savings_goal > 0:
+        progress_percent = min(100, max(0, (balance / user.savings_goal) * 100))
+                
+    return render_template('index.html', user=user, total_paid=total_paid, total_received=total_received, 
+                           balance=balance, recent=recent, goal_status=goal_status, 
+                           savings_msg=savings_msg, progress_percent=progress_percent,
+                           current_month_name=calendar.month_name[now.month],
+                           past_summaries=past_summaries)
+
+@app.route('/add', methods=['POST'])
+def add_expense():
+    if 'user_id' not in session: return redirect('/login')
+    title = request.form.get('title')
+    amount = float(request.form.get('amount'))
+    category = request.form.get('category')
+    include_in_total = 'include_total' in request.form
+    
+    new_exp = Expense(user_id=session['user_id'], title=title, amount=abs(amount), 
+                      category=category, type="Paid" if amount > 0 else "Received",
+                      include_in_total=include_in_total)
+    db.session.add(new_exp); db.session.commit()
+    runMonthlyEvaluation(session['user_id'])
+    flash('Expense Added!', 'success')
+    return redirect('/manual')
+
+@app.route('/delete/<int:id>')
+def delete_expense(id):
+    if 'user_id' not in session: return redirect('/login')
+    exp = Expense.query.get_or_404(id)
+    if exp.user_id == session['user_id']:
+        db.session.delete(exp); db.session.commit()
+        runMonthlyEvaluation(session['user_id'])
+        flash('Deleted successfully.', 'info')
+    return redirect(request.referrer or '/')
+
+@app.route('/parser', methods=['GET', 'POST'])
+def parser():
+    if 'user_id' not in session: return redirect('/login')
+    u_id = session['user_id']
+    if request.method == 'POST':
+        file = request.files.get('statement')
+        if file and file.filename.endswith('.pdf'):
+            filename = secure_filename(file.filename)
+            fpath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(fpath)
+            
+            # Basic PDF Parsing Logic
+            try:
+                with pdfplumber.open(fpath) as pdf:
+                    text = ""
+                    for page in pdf.pages: text += page.extract_text() or ""
+                
+                # Mock parsing: look for lines with dates and amounts
+                # Real logic would be more complex depending on bank format
+                lines = text.split('\n')
+                count = 0
+                for line in lines:
+                    match = re.search(r'(\d{2} \w{3} \d{4}).*?(\d+\.\d{2})', line)
+                    if match:
+                        d_str, amt = match.groups()
+                        new_e = Expense(user_id=u_id, title=f"PDF: {line[:30]}", 
+                                        amount=float(amt), category='Others', is_parsed=True)
+                        db.session.add(new_e)
+                        count += 1
+                db.session.commit()
+                runMonthlyEvaluation(u_id)
+                flash(f'Parsed {count} transactions from PDF!', 'success')
+            except Exception as e:
+                flash(f'Parsing Error: {str(e)}', 'danger')
+            return redirect('/parser')
+            
+    expenses = Expense.query.filter_by(user_id=u_id, is_parsed=True).all()
+    p_paid = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=True, type='Paid').scalar() or 0
+    p_received = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=True, type='Received').scalar() or 0
+    return render_template('parser.html', expenses=expenses, p_paid=p_paid, p_received=p_received)
+
+@app.route('/receipts', methods=['GET', 'POST'])
+def receipts():
+    if 'user_id' not in session: return redirect('/login')
+    u_id = session['user_id']
+    if request.method == 'POST':
+        title = request.form.get('title')
+        amount = float(request.form.get('amount'))
+        category = request.form.get('category')
+        file = request.files.get('file')
+        
+        if file:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            new_e = Expense(user_id=u_id, title=title, amount=amount, 
+                            category=category, attachment=filename)
+            db.session.add(new_e); db.session.commit()
+            runMonthlyEvaluation(u_id)
+            flash('Receipt Uploaded!', 'success')
+            return redirect('/receipts')
+            
+    images = Expense.query.filter(Expense.user_id == u_id, Expense.attachment != None).all()
+    return render_template('receipts.html', images=images, cats=CATS)
+
+
+@app.route('/manual')
+def manual():
+    if 'user_id' not in session: return redirect('/login')
+    u_id = session['user_id']
+    expenses = Expense.query.filter_by(user_id=u_id, is_parsed=False, attachment=None).order_by(Expense.date.desc()).all()
+    m_paid = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=False, type='Paid').scalar() or 0
+    m_received = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=False, type='Received').scalar() or 0
+    cat_sum = db.session.query(Expense.category, func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=False, type='Paid').group_by(Expense.category).all()
+    
+    daily_labels, daily_values = [], []
+    for i in range(6, -1, -1):
+        d = (datetime.utcnow() - timedelta(days=i)).date()
+        amt = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=False, type='Paid').filter(func.date(Expense.date) == d).scalar() or 0
+        daily_labels.append(d.strftime('%b %d')); daily_values.append(amt)
+    return render_template('manual.html', expenses=expenses, cats=CATS, pie_labels=[r[0] for r in cat_sum], pie_values=[r[1] for r in cat_sum], daily_labels=daily_labels, daily_values=daily_values, m_paid=m_paid, m_received=m_received, sel_cat='All')
+
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    if 'user_id' not in session: return redirect('/login')
+    user = User.query.get(session['user_id'])
+    if request.method == 'POST':
+        user.full_name, user.monthly_income, user.savings_goal = request.form.get('full_name'), float(request.form.get('income')), float(request.form.get('goal'))
+        db.session.commit()
+        runMonthlyEvaluation(user.id)
+        return redirect('/')
+    return render_template('profile.html', user=user)
+
+@app.route('/logout')
+def logout(): session.clear(); return redirect('/login')
+
+# --- 5. INVESTMENT ADVISOR ---
+def generateMicroInvestmentPlan(savingsGoal):
+    # Load percentages from env (defaults: 50/30/20)
+    try:
+        micro_pct = float(os.getenv('MICRO_PERCENT', 50))
+        safe_pct = float(os.getenv('SAFE_PERCENT', 30))
+        growth_pct = float(os.getenv('GROWTH_PERCENT', 20))
+    except:
+        micro_pct, safe_pct, growth_pct = 50, 30, 20
+
+    suggestions = []
+    allocation = {}
+    tier = "micro"
+
+    # Business Logic for Allocation
+    if savingsGoal < 1000:
+        tier = "micro"
+        alloc_micro = savingsGoal
+        alloc_safe = 0
+        alloc_growth = 0
+    elif savingsGoal < 5000:
+        tier = "safe" # Includes Micro + Safe
+        # Re-distribute Growth to Safe? Or follow Example which allows Growth?
+        # User Example for 1000 shows Growth. So we will allow Growth even in this tier
+        # but maybe restrict the *types* of high risk?
+        # Current logic: Simple percentage split for > 1000
+        alloc_micro = (micro_pct / 100) * savingsGoal
+        alloc_safe = (safe_pct / 100) * savingsGoal
+        alloc_growth = (growth_pct / 100) * savingsGoal
+    else:
+        tier = "growth"
+        alloc_micro = (micro_pct / 100) * savingsGoal
+        alloc_safe = (safe_pct / 100) * savingsGoal
+        alloc_growth = (growth_pct / 100) * savingsGoal
+
+    # Round allocations
+    alloc_micro = round(alloc_micro)
+    alloc_safe = round(alloc_safe)
+    alloc_growth = round(alloc_growth)
+    
+    # Correction to ensure sum == savingsGoal (dump remainder in micro)
+    total_alloc = alloc_micro + alloc_safe + alloc_growth
+    diff = savingsGoal - total_alloc
+    alloc_micro += diff
+
+    allocation = {
+        "micro": alloc_micro, "micro_percent": (alloc_micro/savingsGoal)*100,
+        "safe": alloc_safe, "safe_percent": (alloc_safe/savingsGoal)*100,
+        "growth": alloc_growth, "growth_percent": (alloc_growth/savingsGoal)*100
+    }
+
+    # Generate Suggestions based on Buckets
+    
+    # 1. Micro Bucket Suggestions (Gold, Silver, Piggy)
+    remaining_micro = alloc_micro
+    if remaining_micro >= 100:
+        # Digital Gold (Priority 1)
+        amt = min(remaining_micro, max(100, remaining_micro * 0.6))
+        amt = round(amt / 10) * 10 # Round to nearest 10
+        suggestions.append({
+            "type": "Digital Gold",
+            "amount": amt,
+            "risk": "Low",
+            "image": "gold.png",
+            "description": "Safe asset that protects against inflation.",
+            "return_range": "10-12% p.a.",
+            "min_amount": 100,
+            "tooltip": "24K Gold 99.9% Purity stored in secure vaults."
+        })
+        remaining_micro -= amt
+
+    if remaining_micro >= 50:
+        # Digital Silver (Priority 2)
+        amt = remaining_micro
+        suggestions.append({
+            "type": "Digital Silver",
+            "amount": amt,
+            "risk": "Medium",
+            "image": "silver.png",
+            "description": "Affordable metal with high industrial demand.",
+            "return_range": "12-15% p.a.",
+            "min_amount": 50,
+            "tooltip": "99.9% Purity Silver. Good for small diversification."
+        })
+        remaining_micro = 0 # All used
+
+    # If any micro left (e.g. < 50 or spillover), put in Piggybank
+    if remaining_micro > 0:
+         suggestions.append({
+            "type": "Piggybank Fund",
+            "amount": remaining_micro,
+            "risk": "Low",
+            "image": "piggybank.png",
+            "description": "Emergency cash for instant access.",
+            "return_range": "0-3% p.a.",
+            "min_amount": 1,
+            "tooltip": "Keep this as digital cash or savings account balance."
+        })
+
+
+    # 2. Safe Bucket Suggestions (RD, Wallet)
+    remaining_safe = alloc_safe
+    if remaining_safe > 0:
+        # Recurring Deposit
+        suggestions.append({
+            "type": "Mini RD Plan",
+            "amount": remaining_safe,
+            "risk": "Low",
+            "image": "rd.png",
+            "description": "Guaranteed returns with bank safety.",
+            "return_range": "6-7.5% p.a.",
+            "min_amount": 500,
+            "tooltip": "Recurring Deposit with partner banks."
+        })
+
+    # 3. Growth Bucket Suggestions (SIP, ETF)
+    remaining_growth = alloc_growth
+    if remaining_growth > 0:
+        # Micro SIP
+        suggestions.append({
+            "type": "Index Fund SIP",
+            "amount": remaining_growth,
+            "risk": "Medium", # SIPs are generally med-high but Index is med
+            "image": "sip.png",
+            "description": "Track top 50 companies for long-term wealth.",
+            "return_range": "12-16% p.a.",
+            "min_amount": 100, # Some platforms allow 100
+            "tooltip": "Nifty 50 Index Fund. Low cost, steady growth."
+        })
+
+    return {
+        "budget": savingsGoal,
+        "tier": tier,
+        "allocation": allocation,
+        "suggestions": suggestions
+    }
+
+@app.route('/investments')
+def investments():
+    if 'user_id' not in session: return redirect('/login')
+    
+    # Get user goal or query param
+    user = User.query.get(session['user_id'])
+    current_goal = user.savings_goal
+    
+    # Allow simulation via query param
+    sim_goal = request.args.get('goal')
+    if sim_goal:
+        try:
+            current_goal = float(sim_goal)
+        except:
+            pass
+            
+    if current_goal < 500: current_goal = 500 # Min floor for logic
+    
+    plan = generateMicroInvestmentPlan(current_goal)
+    
+    # Calculate Future Value (Projection) - Simple 5 year generic
+    # FV = P * ((1+r)^n - 1)/r * (1+r)  (Monthly SIP formula)
+    p = current_goal
+    r = 0.10 / 12 # 10% avg return annual
+    n = 5 * 12
+    future_value = p * ( ((1+r)**n - 1) / r ) * (1+r)
+
+    return render_template('investments.html', 
+                           savings_goal=current_goal,
+                           tier=plan['tier'],
+                           allocation=plan['allocation'],
+                           suggestions=plan['suggestions'],
+                           future_value=future_value,
+                           user=user)
+
+if __name__ == '__main__':
+    with app.app_context(): db.create_all()
+    if not os.path.exists(app.config['UPLOAD_FOLDER']): os.makedirs(app.config['UPLOAD_FOLDER'])
+    app.run(debug=True)

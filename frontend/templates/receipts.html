@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .ai-glow {
+        box-shadow: 0 0 15px rgba(111, 66, 193, 0.5);
+        border-color: #6f42c1 !important;
+        transition: all 0.5s ease;
+    }
+
+    .ai-badge {
+        font-size: 0.7rem;
+        background: linear-gradient(45deg, #6f42c1, #007bff);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 10px;
+        margin-left: 5px;
+    }
+
+    #loadingOverlay {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        z-index: 10;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+    }
+</style>
+
+<div class="row mt-4">
+    <div class="col-md-4 mb-4">
+        <div class="dashboard-card p-4 shadow-sm position-relative">
+            <div id="loadingOverlay">
+                <div class="spinner-border text-primary mb-2" role="status"></div>
+                <span class="fw-bold text-primary">Smart AI Analysis... 🤖</span>
+            </div>
+
+            <h5 class="fw-bold mb-3 text-primary">Digital Vault 🛡️</h5>
+            <form id="receiptForm" action="/receipts" method="POST" enctype="multipart/form-data">
+                <div class="mb-2">
+                    <label class="small text-muted">Merchant <span id="aiMerchant" class="ai-badge d-none">AI
+                            Extracted</span></label>
+                    <input type="text" name="title" id="title" class="form-control" placeholder="Store Name" required>
+                </div>
+                <div class="mb-2">
+                    <label class="small text-muted">Amount <span id="aiAmount" class="ai-badge d-none">AI
+                            Extracted</span></label>
+                    <input type="number" name="amount" id="amount" class="form-control" placeholder="0.00" step="0.01"
+                        required>
+                </div>
+                <div class="mb-3">
+                    <label class="small text-muted">Category <span id="aiCategory" class="ai-badge d-none">AI
+                            Auto-Tag</span></label>
+                    <select name="category" id="category" class="form-select">
+                        {% for c in cats %}<option>{{ c }}</option>{% endfor %}
+                    </select>
+                </div>
+
+                <div class="p-3 border rounded border-dashed mb-3">
+                    <input type="file" name="file" id="fileInput" class="form-control mb-2" required>
+                    <button type="button" onclick="magicAnalyze()" class="btn btn-sm btn-outline-secondary w-100">✨
+                        Magic AI Scan</button>
+                </div>
+
+                <div id="aiWarning" class="alert alert-warning d-none py-2 small">
+                    ⚠️ AI unsure — please verify details.
+                </div>
+
+                <button type="submit" class="btn btn-grad-primary w-100 fw-bold">Confirm & Save to Vault 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="row g-3">
+            {% for img in images %}
+            <div class="col-md-4 mb-3 text-center">
+                <div class="dashboard-card p-2 h-100 shadow-sm border border-secondary-subtle">
+                    {% if img.attachment.lower().endswith('.pdf') %}
+                    <div class="p-4 bg-danger text-white rounded mb-2">📄 PDF Receipt</div>
+                    {% else %}
+                    <img src="{{ url_for('static', filename='uploads/' + img.attachment) }}" class="w-100 rounded mb-2"
+                        style="height: 120px; object-fit: cover;">
+                    {% endif %}
+                    <h6 class="fw-bold small">{{ img.title }} (₹{{ img.amount }})</h6>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="{{ url_for('static', filename='uploads/' + img.attachment) }}" target="_blank"
+                            class="btn btn-sm btn-outline-info">View</a>
+                        <a href="/delete/{{ img.id }}" class="btn btn-sm btn-outline-danger">Del</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+    async function magicAnalyze() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) {
+            alert("Please pick a file first!");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.style.display = 'flex';
+
+        try {
+            const res = await fetch('/api/receipt/analyze', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+
+            if (result.success) {
+                const data = result.data;
+
+                // Auto-fill
+                const titleField = document.getElementById('title');
+                const amountField = document.getElementById('amount');
+                const catField = document.getElementById('category');
+
+                titleField.value = data.merchant || "";
+                amountField.value = data.total_amount || 0;
+
+                // Select matching category if exists
+                if (data.category) {
+                    for (let option of catField.options) {
+                        if (data.category.toLowerCase().includes(option.text.toLowerCase()) ||
+                            option.text.toLowerCase().includes(data.category.toLowerCase())) {
+                            catField.value = option.text;
+                            break;
+                        }
+                    }
+                }
+
+                // Glow & Badges
+                document.querySelectorAll('.form-control, .form-select').forEach(el => el.classList.add('ai-glow'));
+                document.querySelectorAll('.ai-badge').forEach(el => el.classList.remove('d-none'));
+
+                // Confidence warning
+                if (data.confidence_score < 0.7) {
+                    document.getElementById('aiWarning').classList.remove('d-none');
+                } else {
+                    document.getElementById('aiWarning').classList.add('d-none');
+                }
+
+                setTimeout(() => {
+                    document.querySelectorAll('.form-control, .form-select').forEach(el => el.classList.remove('ai-glow'));
+                }, 3000);
+
+            } else {
+                alert("AI extraction failed. Manual entry enabled.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Connection Error. Please enter details manually.");
+        } finally {
+            overlay.style.display = 'none';
+        }
+    }
+</script>
+{% endblock %}
