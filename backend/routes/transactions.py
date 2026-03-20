@@ -19,8 +19,42 @@ def add_expense():
     amount = float(request.form.get('amount'))
     category = request.form.get('category')
     include_in_total = 'include_total' in request.form
-    
-    new_exp = Expense(user_id=session['user_id'], title=title, amount=abs(amount), 
+    force_submit = request.form.get('force_submit', 'false') == 'true'
+
+    # Budget Checking Logic
+    from ..models import CategoryBudget
+    from sqlalchemy import extract
+    if amount > 0 and not force_submit:
+        budget = CategoryBudget.query.filter_by(user_id=session['user_id'], category=category).first()
+        if budget and budget.monthly_limit > 0:
+            now = datetime.utcnow()
+            current_total = db.session.query(func.sum(Expense.amount)).filter(
+                Expense.user_id == session['user_id'],
+                Expense.category == category,
+                Expense.type == 'Paid',
+                extract('year', Expense.expense_date) == now.year,
+                extract('month', Expense.expense_date) == now.month
+            ).scalar() or 0
+            
+            if float(current_total) + amount > float(budget.monthly_limit):
+                # Trigger Gemini
+                try:
+                    import google.generativeai as genai
+                    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+                    prompt = f"System: You are 'Expense AI', a strict financial coach. User tried to spend ₹{amount} on '{category}'. Their limit is ₹{budget.monthly_limit}, but they already spent ₹{current_total}. Give a punchy 1-2 sentence warning explaining the impact and ask if they really need this. No markdown."
+                    response = model.generate_content(prompt)
+                    warning_msg = response.text.strip()
+                except Exception as e:
+                    warning_msg = f"Adding this expense exceeds your monthly {category} budget of ₹{budget.monthly_limit}. Do you want to proceed?"
+                    
+                if request.headers.get('Accept') == 'application/json' or request.is_json:
+                    return {'status': 'budget_exceeded', 'message': warning_msg, 'category': category}, 403
+
+    from ..models import FamilyMember
+    membership = FamilyMember.query.filter_by(user_id=session['user_id']).first()
+    g_id = membership.group_id if membership and 'is_shared' in request.form else None
+
+    new_exp = Expense(user_id=session['user_id'], group_id=g_id, title=title, amount=abs(amount), 
                       category=category, type="Paid" if amount > 0 else "Received",
                       include_in_total=include_in_total)
     db.session.add(new_exp); db.session.commit()
@@ -33,6 +67,8 @@ def add_expense():
     generate_spending_insights(session['user_id'], now.year, now.month)
 
     flash('Expense Added!', 'success')
+    if request.headers.get('Accept') == 'application/json' or request.is_json:
+        return {'status': 'success'}
     return redirect(url_for('transactions.manual'))
 
 @bp.route('/delete/<id>')
@@ -395,4 +431,99 @@ def manual():
         d = (datetime.utcnow() - timedelta(days=i)).date()
         amt = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=False, type='Paid').filter(func.date(Expense.expense_date) == d).scalar() or 0
         daily_labels.append(d.strftime('%b %d')); daily_values.append(amt)
-    return render_template('manual.html', expenses=expenses, cats=CATS, pie_labels=[r[0] for r in cat_sum], pie_values=[r[1] for r in cat_sum], daily_labels=daily_labels, daily_values=daily_values, m_paid=m_paid, m_received=m_received, sel_cat='All')
+    from ..models import FamilyMember
+    membership = FamilyMember.query.filter_by(user_id=u_id).first()
+    in_group = membership is not None
+    
+    return render_template('manual.html', expenses=expenses, cats=CATS, pie_labels=[r[0] for r in cat_sum], pie_values=[r[1] for r in cat_sum], daily_labels=daily_labels, daily_values=daily_values, m_paid=m_paid, m_received=m_received, sel_cat='All', in_group=in_group)
+
+import pandas as pd
+import io
+from flask import send_file
+
+@bp.route('/api/export/csv')
+def export_csv():
+    if 'user_id' not in session: return redirect(url_for('auth.login'))
+    u_id = session['user_id']
+    expenses = Expense.query.filter_by(user_id=u_id).order_by(Expense.expense_date.desc()).all()
+    
+    data = []
+    for e in expenses:
+        data.append({
+            "Date": e.expense_date.strftime('%Y-%m-%d %H:%M:%S') if e.expense_date else '',
+            "Title": e.title,
+            "Amount": float(e.amount),
+            "Type": e.type,
+            "Category": e.category
+        })
+        
+    df = pd.DataFrame(data)
+    
+    output = io.BytesIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
+    
+    return send_file(output, mimetype='text/csv', as_attachment=True, download_name='ExpenseAI_Report.csv')
+
+@bp.route('/api/export/pdf')
+def export_pdf():
+    if 'user_id' not in session: return redirect(url_for('auth.login'))
+    u_id = session['user_id']
+    
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return "ReportLab not installed", 500
+
+    expenses = Expense.query.filter_by(user_id=u_id).order_by(Expense.expense_date.desc()).all()
+
+    output = io.BytesIO()
+    c = canvas.Canvas(output, pagesize=letter)
+    width, height = letter
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, height - 50, "ExpenseAI - Financial Report")
+    
+    c.setFont("Helvetica", 10)
+    y = height - 80
+    c.drawString(50, y, "Date")
+    c.drawString(150, y, "Title")
+    c.drawString(350, y, "Category")
+    c.drawString(450, y, "Amount")
+    c.drawString(520, y, "Type")
+    
+    y -= 10
+    c.line(50, y, width - 50, y)
+    y -= 15
+    
+    total_paid = 0
+    total_received = 0
+    
+    for e in expenses:
+        if y < 50:
+            c.showPage()
+            c.setFont("Helvetica", 10)
+            y = height - 50
+            
+        c.drawString(50, y, e.expense_date.strftime('%Y-%m-%d') if e.expense_date else '')
+        title = e.title[:25] + '...' if len(e.title) > 25 else e.title
+        c.drawString(150, y, title)
+        c.drawString(350, y, e.category)
+        c.drawString(450, y, f"Rs.{float(e.amount):.2f}")
+        c.drawString(520, y, e.type)
+        y -= 15
+        
+        if e.type == 'Paid': total_paid += e.amount
+        elif e.type == 'Received': total_received += e.amount
+
+    y -= 10
+    c.line(50, y, width - 50, y)
+    y -= 25
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, f"Total Paid: Rs.{float(total_paid):.2f}")
+    c.drawString(250, y, f"Total Received: Rs.{float(total_received):.2f}")
+
+    c.save()
+    output.seek(0)
+    return send_file(output, mimetype='application/pdf', as_attachment=True, download_name='ExpenseAI_Report.pdf')

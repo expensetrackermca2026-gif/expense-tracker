@@ -409,42 +409,41 @@
       <div class="greeting-name">Hi, {{ user.full_name }}! 👋</div>
       <div class="greeting-sub">Here's your financial overview for {{ current_month_name }}.</div>
       <div class="badge-group">
-        <span class="fin-badge income">📈 Income ₹{{ "{:,.0f}".format(user.monthly_income + total_received) }}</span>
-        <span class="fin-badge spending">💸 Spent ₹{{ "{:,.0f}".format(total_paid) }}</span>
-        <span class="fin-badge balance">💎 Balance ₹{{ "{:,.0f}".format(balance) }}</span>
+        <span class="fin-badge income">📈 Income ₹<span id="stat-income">{{ "{:,.0f}".format(user.monthly_income + total_received) }}</span></span>
+        <span class="fin-badge spending">💸 Spent ₹<span id="stat-spent-alt">{{ "{:,.0f}".format(total_paid) }}</span></span>
+        <span class="fin-badge balance">💎 Balance ₹<span id="stat-balance">{{ "{:,.0f}".format(balance) }}</span></span>
       </div>
     </div>
 
     <!-- ── KPI Cards ─────────────────────────── -->
     <div class="kpi-row animate__animated animate__fadeInUp">
-      <!-- Balance -->
+      <!-- Spend -->
+      <div class="kpi-card spent">
+        <div class="kpi-label">Monthly Spend</div>
+        <div class="kpi-value">₹<span id="stat-spent">{{ "{:,.0f}".format(total_paid) }}</span></div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">This month</div>
+        <div class="kpi-icon">💸</div>
+      </div>
+
+      <!-- Savings % -->
       <div class="kpi-card balance">
-        <div class="kpi-label">Ledger Balance</div>
-        <div class="kpi-value">₹<span id="stat-balance">{{ "{:,.0f}".format(balance) }}</span></div>
-        <div class="goal-bar-track">
+        <div class="kpi-label">Savings Progress</div>
+        <div class="kpi-value"><span id="stat-progress-val">{{ progress_percent|round|int }}</span>%</div>
+        <div class="goal-bar-track" style="margin-top:10px;">
           <div id="stat-progress-bar" class="goal-bar-fill" data-width="{{ progress_percent }}" style="width:0%"></div>
         </div>
         <div style="display:flex; justify-content:space-between; margin-top:6px;">
           <span style="font-size:10px; color:var(--text-muted);">Goal ₹{{ "{:,.0f}".format(user.savings_goal) }}</span>
-          <span style="font-size:10px; font-weight:700; color:#818cf8;"><span id="stat-progress-val">{{ progress_percent|round|int }}</span>%</span>
         </div>
-        <div class="kpi-icon">💎</div>
+        <div class="kpi-icon">🎯</div>
       </div>
 
-      <!-- Income -->
+      <!-- Top Category -->
       <div class="kpi-card income">
-        <div class="kpi-label">Monthly Income</div>
-        <div class="kpi-value">₹<span id="stat-income">{{ "{:,.0f}".format(user.monthly_income + total_received) }}</span></div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">Base + Received</div>
-        <div class="kpi-icon">📈</div>
-      </div>
-
-      <!-- Spent -->
-      <div class="kpi-card spent">
-        <div class="kpi-label">Total Spent</div>
-        <div class="kpi-value">₹<span id="stat-spent">{{ "{:,.0f}".format(total_paid) }}</span></div>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">This month</div>
-        <div class="kpi-icon">💸</div>
+        <div class="kpi-label">Top Category</div>
+        <div class="kpi-value"><span style="font-size:20px;">{{ top_category }}</span></div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:8px;">Highest spend area</div>
+        <div class="kpi-icon">🔥</div>
       </div>
     </div>
 
@@ -476,16 +475,49 @@
       <div class="anomaly-card animate__animated animate__fadeIn">
         <div style="font-size:22px;">⚠️</div>
         <div style="flex:1;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <span style="font-size:12px;font-weight:700;color:#fca5a5;">AI Anomaly Detected</span>
-            <span class="anomaly-badge">{{ a.type }}</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:12px;font-weight:700;color:#fca5a5;">AI Anomaly Detected</span>
+                <span class="anomaly-badge">{{ a.type }}</span>
+            </div>
+            {% if a.percentage_spike and a.percentage_spike > 0 %}
+            <span style="font-size:11px;font-weight:800;color:#fca5a5;background:rgba(239,68,68,0.2);padding:2px 6px;border-radius:4px;">+{{ a.percentage_spike|round|int }}% SPIKE</span>
+            {% endif %}
           </div>
-          <div style="font-size:12px;color:var(--text-muted);">{{ a.reason }}</div>
+          <div style="font-size:12px;color:var(--text-muted); line-height:1.4;">{{ a.reason }}</div>
         </div>
       </div>
       {% endfor %}
     </div>
     {% endif %}
+
+    <!-- ── Charts Row ─────────────────────────── -->
+    <div class="row g-3 section-spacer animate__animated animate__fadeInUp">
+      <div class="col-md-7">
+        <div class="info-card h-100">
+          <div class="info-card-header">
+            <div class="section-icon" style="background:rgba(245,158,11,0.12);">📉</div>
+            <h5>6-Month Trend</h5>
+          </div>
+          <div class="info-card-body">
+            <div style="height: 200px;">
+              <canvas id="trendChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="info-card h-100">
+          <div class="info-card-header">
+            <div class="section-icon" style="background:rgba(167,139,250,0.12);">🍩</div>
+            <h5>Category Split</h5>
+          </div>
+          <div class="info-card-body" style="height: 200px;">
+            <canvas id="pieChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ── Recent Transactions ────────────────── -->
     <div class="info-card section-spacer animate__animated animate__fadeInUp">
@@ -569,7 +601,7 @@
         <div class="ai-glow-icon">🕵️</div>
         <div>
           <div class="ai-report-title">AI Spending Report</div>
-          <div class="ai-report-subtitle">Powered by Gemini · {{ current_month_name }}</div>
+          <div class="ai-report-subtitle">Powered by Expense AI · {{ current_month_name }}</div>
         </div>
         <div class="ai-live-badge">
           <span class="ai-live-dot"></span> LIVE
@@ -686,6 +718,7 @@
     savings:  ['saving', 'save', 'advice', 'recommendation', 'tip', 'budget', 'reduce', 'cut'],
     warnings: ['warning', 'risk', 'caution', 'alert', 'concern', 'danger', 'potential'],
     invest:   ['invest', 'mutual fund', 'sip', 'stock', 'fd', 'gold', 'wealth', 'portfolio'],
+    ignore:   ['summary', 'conclusion', 'positive', 'reinforcement', 'generated by'],
   };
 
   function cleanMarkdown(text) {
@@ -731,7 +764,7 @@
           break;
         }
       }
-      if (!matched) {
+      if (!matched && currentSection !== 'ignore') {
         // Also detect from paragraph content
         let contentSection = null;
         for (const [sec, keywords] of Object.entries(SECTION_KEYWORDS)) {
@@ -760,16 +793,101 @@
 })();
 
 /* ═══════════════════════════════════════════════════════
+   CHART.JS INITIALIZATION
+   ═══════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function() {
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.font.family = 'Inter';
+
+  // Category Pie Chart
+  const pieCtx = document.getElementById('pieChart');
+  if (pieCtx) {
+    const pLabels = {{ pie_labels|tojson|safe }};
+    const pData = {{ pie_values|tojson|safe }};
+    new Chart(pieCtx, {
+      type: 'doughnut',
+      data: {
+        labels: pLabels,
+        datasets: [{
+          data: pData,
+          backgroundColor: ['#4f8ef7', '#22c55e', '#f59e0b', '#ef4444', '#a78bfa', '#ec4899', '#14b8a6', '#f97316'],
+          borderWidth: 0,
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  }
+
+  // Monthly Trend Line Chart
+  const trendCtx = document.getElementById('trendChart');
+  if (trendCtx) {
+    const tLabels = {{ trend_labels|tojson|safe }};
+    const tData = {{ trend_values|tojson|safe }};
+    new Chart(trendCtx, {
+      type: 'line',
+      data: {
+        labels: tLabels,
+        datasets: [{
+          label: 'Total Spend (₹)',
+          data: tData,
+          borderColor: '#4f8ef7',
+          backgroundColor: 'rgba(79, 142, 247, 0.15)',
+          borderWidth: 3,
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: '#0d1117',
+          pointBorderColor: '#4f8ef7',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { grid: { display: false, drawBorder: false } },
+          y: { 
+            grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+            ticks: { maxTicksLimit: 5 }
+          }
+        }
+      }
+    });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
    DASHBOARD LIVE STATS SYNC
    ═══════════════════════════════════════════════════════ */
 async function refreshDashboard() {
   try {
     const res = await fetch('/api/dashboard/stats');
+    if (!res.ok) return;
     const data = await res.json();
-    if (data.current_balance !== undefined) {
-      document.getElementById('stat-balance').innerText = data.current_balance.toLocaleString('en-IN', {maximumFractionDigits:0});
-      document.getElementById('stat-income').innerText  = data.total_income.toLocaleString('en-IN',  {maximumFractionDigits:0});
-      document.getElementById('stat-spent').innerText   = data.total_spent.toLocaleString('en-IN',   {maximumFractionDigits:0});
+    if (data && data.current_balance !== undefined) {
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = Number(val).toLocaleString('en-IN', {maximumFractionDigits:0});
+      };
+      
+      setVal('stat-balance', data.current_balance);
+      setVal('stat-balance-alt', data.current_balance);
+      setVal('stat-income', data.total_income);
+      setVal('stat-spent', data.total_spent);
+      setVal('stat-spent-alt', data.total_spent);
+      
       const bar = document.getElementById('stat-progress-bar');
       const val = document.getElementById('stat-progress-val');
       if (bar) bar.style.width = data.goal_progress + '%';

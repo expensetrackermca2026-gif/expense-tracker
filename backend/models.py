@@ -134,11 +134,31 @@ class EmailVerification(db.Model):
 
 # --- DOMAIN TABLES ---
 
+class FamilyGroup(db.Model):
+    __tablename__ = 'family_groups'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = db.Column(db.String(100), nullable=False)
+    created_by = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    members = db.relationship('FamilyMember', backref='group', lazy=True, cascade="all, delete-orphan")
+    expenses = db.relationship('Expense', backref='group', lazy=True, cascade="all, delete-orphan")
+
+class FamilyMember(db.Model):
+    __tablename__ = 'family_members'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    group_id = db.Column(UUID(as_uuid=True), db.ForeignKey('family_groups.id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    role = db.Column(db.String(20), default='MEMBER') # ADMIN, MEMBER
+    joined_at = db.Column(db.DateTime(timezone=True), server_default=func.now(), nullable=False)
+
 class Expense(db.Model):
     __tablename__ = 'expenses'
 
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    group_id = db.Column(UUID(as_uuid=True), db.ForeignKey('family_groups.id', ondelete='CASCADE'), nullable=True)
     title = db.Column(db.String(255), nullable=False)
     amount = db.Column(db.Numeric(15, 2), default=0.00, nullable=False)
     category = db.Column(db.String(50), nullable=False)
@@ -159,6 +179,18 @@ class Expense(db.Model):
 
     __table_args__ = (
         db.Index('idx_expenses_user_date', 'user_id', text('expense_date DESC')),
+    )
+
+class CategoryBudget(db.Model):
+    __tablename__ = 'category_budgets'
+
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    monthly_limit = db.Column(db.Numeric(15, 2), default=0.00, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'category', name='unique_user_category_budget'),
     )
 
 
@@ -295,6 +327,8 @@ class AnomalyWarning(db.Model):
     expense_id = db.Column(UUID(as_uuid=True), db.ForeignKey('expenses.id', ondelete='CASCADE'))
     type = db.Column(db.String(50)) # "LARGE_EXPENSE", "SUSPICIOUS_SPIKE", "DUPLICATE"
     reason = db.Column(db.Text)
+    amount_diff = db.Column(db.Numeric(15, 2))
+    percentage_spike = db.Column(db.Numeric(15, 2))
     is_resolved = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
 
@@ -354,3 +388,14 @@ class ArchiveTransaction(db.Model):
     amount = db.Column(db.Numeric(15, 2))
     type = db.Column(db.String(20))
     category = db.Column(db.String(100), default='Others')
+
+class LoginAudit(db.Model):
+    __tablename__ = 'login_audits'
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id', ondelete='CASCADE'), nullable=True) # Null for unknown user attempts
+    email_attempted = db.Column(db.String(255))
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    status = db.Column(db.String(20)) # "SUCCESS", "FAILED"
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+

@@ -23,11 +23,12 @@ def create_app(config_class=Config):
     )
     
     # Register Blueprints
-    from .routes import auth, main, transactions, savings
+    from .routes import auth, main, transactions, savings, fincoach, family
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
     app.register_blueprint(transactions.bp)
-
     app.register_blueprint(savings.bp)
+    app.register_blueprint(fincoach.bp)
+    app.register_blueprint(family.bp)
     
     return app

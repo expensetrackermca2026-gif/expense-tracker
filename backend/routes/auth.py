@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Message
 from ..extensions import db, mail, oauth
-from ..models import User, UserAuthProvider, AuthProviderType
+from ..models import User, UserAuthProvider, AuthProviderType, LoginAudit
 import random
 
 bp = Blueprint('auth', __name__)
@@ -84,8 +84,28 @@ def login():
                 session['user_id'] = str(user.id) # Convert UUID to string for session
                 session['user_name'] = user.full_name
                 
-                # Log login success (optional, based on new schema capabilities)
+                # Log Success
+                audit = LoginAudit(user_id=user.id, email_attempted=email, 
+                                  ip_address=request.remote_addr, 
+                                  user_agent=request.user_agent.string, 
+                                  status="SUCCESS")
+                db.session.add(audit); db.session.commit()
                 return redirect(url_for('main.index'))
+            
+            # Log Failed (User exists but wrong pass)
+            audit = LoginAudit(user_id=user.id, email_attempted=email, 
+                              ip_address=request.remote_addr, 
+                              user_agent=request.user_agent.string, 
+                              status="FAILED")
+            db.session.add(audit); db.session.commit()
+                
+        else:
+            # Log Failed (User does not exist)
+            audit = LoginAudit(email_attempted=email, 
+                              ip_address=request.remote_addr, 
+                              user_agent=request.user_agent.string, 
+                              status="FAILED")
+            db.session.add(audit); db.session.commit()
                 
         flash('Invalid Credentials!', 'danger')
     return render_template('login.html')

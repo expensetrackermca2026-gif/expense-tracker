@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="col-md-6 col-lg-5">
+        <div class="glass-card p-5 text-center animate__animated animate__zoomIn">
+            <div class="mb-4">
+                <span style="font-size: 60px;">🏠</span>
+            </div>
+            <h2 class="fw-bold mb-3">Family Mode</h2>
+            <p class="text-muted mb-5">
+                Join forces to track household spending, split bills, and achieve shared savings goals together.
+            </p>
+            
+            <div class="d-grid gap-3">
+                <!-- Create -->
+                <button class="btn btn-grad-primary py-3 fw-bold shadow" data-bs-toggle="modal" data-bs-target="#createGroupModal">
+                    Create New Family Group
+                </button>
+                
+                <div class="divider text-muted small">OR</div>
+                
+                <!-- Join -->
+                <button class="btn btn-outline-light py-3 fw-bold" data-bs-toggle="modal" data-bs-target="#joinGroupModal">
+                    Join Existing Group
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Modal -->
+<div class="modal fade" id="createGroupModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-body p-4">
+                <h5 class="fw-bold mb-4">Start your Family Group</h5>
+                <form action="{{ url_for('family.create') }}" method="POST">
+                    <div class="mb-4">
+                        <label class="form-label text-muted small">Family Name</label>
+                        <input type="text" name="group_name" class="form-control" placeholder="e.g. The Smiths" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-grad-primary py-2 fw-bold">Create Group</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Join Modal -->
+<div class="modal fade" id="joinGroupModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-body p-4">
+                <h5 class="fw-bold mb-4">Join your Family</h5>
+                <p class="text-muted small mb-4">Ask your family admin for their Group ID.</p>
+                <form action="{{ url_for('family.join') }}" method="POST">
+                    <div class="mb-4">
+                        <label class="form-label text-muted small">Group ID</label>
+                        <input type="text" name="group_id" class="form-control" placeholder="Paste ID here..." required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-outline-light py-2 fw-bold">Join Group</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+}
+.divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.divider:not(:empty)::before { margin-right: 1em; }
+.divider:not(:empty)::after { margin-left: 1em; }
+
+.glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+}
+</style>
+{% endblock %}

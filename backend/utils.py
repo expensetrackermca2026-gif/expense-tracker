@@ -230,33 +230,94 @@ def categorize_with_ai(expense_id):
 
 @run_async_ai
 def detect_anomalies(user_id, expense_id):
-    """Module 6: Scans for large spikes, duplicates, or unusual spending compared to 30-day average."""
+    """Module 6: Enhanced Fraud / Anomaly Intelligence"""
     from backend import db
     from backend.models import Expense, AnomalyWarning
     from backend import create_app
+    from sqlalchemy import extract
     app = create_app()
     with app.app_context():
         exp = Expense.query.get(expense_id)
-        if not exp: return
+        if not exp or exp.type != 'Paid': return
 
-        # 1. Duplicate check (Exact hash already handled in route, but let's check fuzzy title/amount)
-        matches = Expense.query.filter(
+        now = datetime.utcnow()
+        model = get_ai_model()
+
+        # 1. Duplicate Detection Engine
+        # Fuzzy match: same amount, same date, similar title
+        duplicate_candidate = Expense.query.filter(
             Expense.user_id == user_id,
             Expense.id != exp.id,
             Expense.amount == exp.amount,
-            Expense.title == exp.title,
-            Expense.expense_date >= (exp.expense_date - timedelta(hours=24))
+            db.func.date(Expense.expense_date) == exp.expense_date.date()
         ).first()
-        
-        if matches:
-            warn = AnomalyWarning(user_id=user_id, expense_id=exp.id, type="DUPLICATE", reason="Possible duplicate charge detected within 24 hours.")
-            db.session.add(warn); db.session.commit()
-            return
 
-        # 2. Large Spike Check (Gemini assisted)
-        avg_spend = db.session.query(func.avg(Expense.amount)).filter_by(user_id=user_id, type='Paid').scalar() or 0
-        if exp.amount > (Decimal(str(avg_spend)) * 5) and exp.amount > 1000:
-            warn = AnomalyWarning(user_id=user_id, expense_id=exp.id, type="LARGE_EXPENSE", reason=f"Large expense of ₹{exp.amount} detected. Your avg is ₹{avg_spend:,.0f}.")
+        if duplicate_candidate:
+            # Check if titles are similar
+            if exp.title.lower() in duplicate_candidate.title.lower() or duplicate_candidate.title.lower() in exp.title.lower():
+                reason = "Potential Duplicate Charge"
+                ai_explanation = f"We noticed two identical charges of ₹{exp.amount} for '{exp.title}' on {exp.expense_date.strftime('%Y-%m-%d')}. Verify if you accidentally paid twice."
+                
+                if model:
+                    try:
+                        prompt = f"System: 'Expense AI' auditor. Task: Write a friendly, 1-sentence warning about a possible duplicate charge of ₹{exp.amount} for '{exp.title}'. Act helpful."
+                        ai_explanation = model.generate_content(prompt).text.strip()
+                    except: pass
+                
+                warn = AnomalyWarning(user_id=user_id, expense_id=exp.id, type="DUPLICATE", reason=ai_explanation, amount_diff=0, percentage_spike=0)
+                db.session.add(warn)
+                db.session.commit()
+                return # Stop processing further anomalies for this row
+
+        # 2. Category Spike Detection (Rolling window vs Previous Month)
+        # Get total for this category LAST month
+        prev_month = now.replace(day=1) - timedelta(days=1)
+        prev_total = db.session.query(func.sum(Expense.amount)).filter(
+            Expense.user_id == user_id, Expense.category == exp.category, Expense.type == 'Paid',
+            extract('year', Expense.expense_date) == prev_month.year,
+            extract('month', Expense.expense_date) == prev_month.month
+        ).scalar() or Decimal('0.0')
+
+        # Get total for this category THIS month (including the new expense)
+        curr_total = db.session.query(func.sum(Expense.amount)).filter(
+            Expense.user_id == user_id, Expense.category == exp.category, Expense.type == 'Paid',
+            extract('year', Expense.expense_date) == now.year,
+            extract('month', Expense.expense_date) == now.month
+        ).scalar() or Decimal('0.0')
+
+        # If previous month had significant spend, check for spikes
+        if prev_total > 500:
+            diff = curr_total - prev_total
+            percentage = (diff / prev_total) * 100
+            
+            # If current spend is 50% higher than last month's TOTAL spend, it's a spike!
+            if percentage > 50 and diff > 1000:
+                ai_explanation = f"Your '{exp.category}' spending has surged by {percentage:.0f}% compared to last month. Watch out!"
+                if model:
+                    try:
+                        prompt = f"System: 'Expense AI' auditor. Context: User's {exp.category} spending hit ₹{curr_total}, which is a {percentage:.0f}% spike compared to last month's ₹{prev_total}. The recent trigger was ₹{exp.amount} on '{exp.title}'. Task: Generate a short 1-2 sentence friendly alert explaining the spike and offering a quick tip to curb it."
+                        ai_explanation = model.generate_content(prompt).text.strip()
+                    except: pass
+
+                warn = AnomalyWarning(
+                    user_id=user_id, expense_id=exp.id, type="CATEGORY_SPIKE", 
+                    reason=ai_explanation, amount_diff=diff, percentage_spike=percentage
+                )
+                db.session.add(warn)
+                db.session.commit()
+                return
+
+        # 3. Absolute Large Expense Check (Fallback)
+        avg_spend = db.session.query(func.avg(Expense.amount)).filter_by(user_id=user_id, type='Paid').scalar() or Decimal('0.0')
+        if exp.amount > (avg_spend * 5) and exp.amount > 2000:
+            ai_explanation = f"Large absolute expense of ₹{exp.amount} detected! Your typical average is ₹{avg_spend:,.0f}."
+            if model:
+                try:
+                    prompt = f"System: 'Expense AI' auditor. Context: User spent ₹{exp.amount} on '{exp.title}', which is 5x higher than their ₹{avg_spend:,.0f} average. Task: Keep it 1 short sentence. Ask them if this was a planned large purchase."
+                    ai_explanation = model.generate_content(prompt).text.strip()
+                except: pass
+
+            warn = AnomalyWarning(user_id=user_id, expense_id=exp.id, type="LARGE_EXPENSE", reason=ai_explanation, amount_diff=(exp.amount - avg_spend), percentage_spike=0)
             db.session.add(warn); db.session.commit()
 
 @run_async_ai

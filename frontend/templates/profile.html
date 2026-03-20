@@ -53,9 +53,25 @@
                      style="background: rgba(59, 130, 246, 0.1); border: 1px dashed #3b82f6; display: none;">
                     <small class="text-muted d-block mb-1">Interactive Budget Insight:</small>
                     <p class="mb-0 fw-bold text-white">
-                        Your monthly spending budget will be <span class="text-success" id="spendLimit">₹0</span>.
+                        Your monthly flexible budget will be <span class="text-success" id="spendLimit">₹0</span>.
                     </p>
                     <small class="text-muted mt-1 d-block" id="goalAdvice"></small>
+                </div>
+
+                <div class="mb-4">
+                    <h6 class="fw-bold text-primary mb-3 mt-4 border-bottom border-secondary pb-2">Category Budgets (Smart Lock)</h6>
+                    <small class="text-muted d-block mb-3">Set monthly limits to receive AI warnings and Soft Locks when exceeded.</small>
+                    <div class="row g-2">
+                        {% for c in cats %}
+                        <div class="col-6">
+                            <label class="form-label small text-muted mb-1">{{ c }}</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-dark border-secondary">₹</span>
+                                <input type="number" name="budget_{{ c }}" class="form-control bg-dark text-white border-secondary" placeholder="0" value="{{ budgets.get(c, 0) }}">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
 
                 <!-- SAVE BUTTON -->
@@ -65,6 +81,29 @@
             </form>
         </div>
         <!-- GLASS CARD END -->
+
+        <!-- SECURITY AUDIT SECTION -->
+        <div class="dashboard-card p-4 shadow-lg border-danger border-opacity-25 animate__animated animate__fadeInUp mt-4" 
+             style="backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.1);">
+            <h6 class="fw-bold text-danger mb-3 border-bottom border-secondary pb-2">Security & Activity Log 🛡️</h6>
+            <div class="d-flex flex-column gap-3">
+                {% for log in audits %}
+                <div class="d-flex align-items-center justify-content-between border-bottom border-light border-opacity-10 pb-2">
+                    <div>
+                        <div class="fw-bold small {% if log.status == 'SUCCESS' %}text-success{% else %}text-danger{% endif %}">
+                            {{ log.status }} LOGIN
+                        </div>
+                        <div class="text-muted" style="font-size: 10px;">{{ log.ip_address }} • {{ log.created_at.strftime('%b %d, %H:%M:%S') }}</div>
+                    </div>
+                    <div class="text-muted small" style="font-size: 9px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        {{ log.user_agent }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted small py-3">No recent security events.</div>
+                {% endfor %}
+            </div>
+        </div>
 
     </div>
 </div>

@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Tech Stack:
 #   Backend  : Flask (Python 3.10+), SQLAlchemy, Flask-Mail, pdfplumber,
-#               Google Generative AI (Gemini), Authlib (Google OAuth)
+#               Google Generative AI (Expense AI), Authlib (Google OAuth)
 #   Database : PostgreSQL (NeonDB hosted) or SQLite (auto-fallback)
 #   Frontend : Jinja2 HTML Templates (in /frontend/templates/)
 #   Static   : CSS/JS/Uploads (in /frontend/static/)
@@ -45,7 +45,7 @@ STEP 4 — Verify the .env file exists in the project root:
       DATABASE_URL          (PostgreSQL NeonDB connection string)
       MAIL_USERNAME         (Gmail address)
       MAIL_PASSWORD         (Gmail App Password)
-      GOOGLE_API_KEY        (Gemini AI key)
+      GOOGLE_API_KEY        (Expense AI key)
       GOOGLE_CLIENT_ID      (OAuth 2.0 Client ID)
       GOOGLE_CLIENT_SECRET  (OAuth 2.0 Client Secret)
       MICRO_PERCENT=50
@@ -105,7 +105,7 @@ STEP 3 — Stop containers:
   │   ├── config.py                ← App configuration (reads from .env)
   │   ├── extensions.py            ← Flask extensions (db, mail, oauth)
   │   ├── models.py                ← SQLAlchemy database models
-  │   ├── utils.py                 ← AI (Gemini), PDF parsing, helper functions
+  │   ├── utils.py                 ← AI (Expense AI), PDF parsing, helper functions
   │   ├── requirements.txt         ← Python dependencies
   │   ├── routes/
   │   │   ├── auth.py              ← Login, signup, Google OAuth, email verify

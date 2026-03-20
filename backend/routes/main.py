@@ -15,7 +15,7 @@ def inject_ai_status():
 
 @bp.route('/')
 def index():
-    if 'user_id' not in session: return redirect(url_for('auth.login'))
+    if 'user_id' not in session: return render_template('landing.html')
     user = User.query.get(session['user_id'])
     # Check if user exists (session might be stale)
     if not user:
@@ -73,12 +73,31 @@ def index():
     # Fallback for small advice if report not generated yet
     ai_insight = ai_report.content if ai_report else "AI is analyzing your spending patterns... check back in a moment! 🤖"
 
+    # Gather Chart Data
+    cat_sum = db.session.query(Expense.category, func.sum(Expense.amount)).filter_by(user_id=user.id, type='Paid').filter(func.extract('year', Expense.expense_date) == now.year, func.extract('month', Expense.expense_date) == now.month).group_by(Expense.category).all()
+    pie_labels = [r[0] for r in cat_sum]
+    pie_values = [float(r[1]) for r in cat_sum]
+
+    trend_labels = []
+    trend_values = []
+    for i in range(5, -1, -1):
+        m = (now.month - i - 1) % 12 + 1
+        y = now.year - 1 if m > now.month else now.year
+        amt = db.session.query(func.sum(Expense.amount)).filter_by(user_id=user.id, type='Paid').filter(func.extract('year', Expense.expense_date) == y, func.extract('month', Expense.expense_date) == m).scalar() or 0
+        trend_labels.append(calendar.month_abbr[m])
+        trend_values.append(float(amt))
+
+    top_category = pie_labels[pie_values.index(max(pie_values))] if pie_values else "N/A"
+
     return render_template('index.html', user=user, total_paid=total_paid, total_received=total_received, 
                            balance=current_balance, recent=recent, goal_status=goal_status, 
                            savings_msg=savings_msg, progress_percent=progress_percent,
                            current_month_name=calendar.month_name[now.month],
                            past_summaries=past_summaries, ai_insight=ai_insight,
-                           active_anomalies=active_anomalies)
+                           active_anomalies=active_anomalies,
+                           pie_labels=pie_labels, pie_values=pie_values,
+                           trend_labels=trend_labels, trend_values=trend_values,
+                           top_category=top_category)
 
 @bp.route('/api/dashboard/stats')
 def dashboard_stats():
@@ -104,11 +123,34 @@ def profile():
     user = User.query.get(session['user_id'])
     if not user: return redirect(url_for('auth.login')) # Handle stale session
     
+    from ..models import CategoryBudget, LoginAudit
+    from ..utils import CATS
+    
     if request.method == 'POST':
+        from decimal import Decimal
+        
+        income_str = request.form.get('income', '0').strip()
+        goal_str = request.form.get('goal', '0').strip()
+        
         user.full_name = request.form.get('full_name')
-        user.monthly_income = float(request.form.get('income'))
-        user.savings_goal = float(request.form.get('goal'))
+        user.monthly_income = Decimal(income_str) if income_str else Decimal(0)
+        user.savings_goal = Decimal(goal_str) if goal_str else Decimal(0)
+        
+        for c in CATS:
+            b_val = request.form.get(f'budget_{c}')
+            if b_val is not None:
+                amt = Decimal(b_val.strip()) if b_val.strip() else Decimal(0)
+                cb = CategoryBudget.query.filter_by(user_id=user.id, category=c).first()
+                if not cb:
+                    cb = CategoryBudget(user_id=user.id, category=c)
+                    db.session.add(cb)
+                cb.monthly_limit = amt
+        
+        db.session.add(user)
         db.session.commit()
-        runMonthlyEvaluation(session['user_id'])
+        runMonthlyEvaluation(str(user.id))
         return redirect(url_for('main.index'))
-    return render_template('profile.html', user=user)
+        
+    budgets = {b.category: float(b.monthly_limit) for b in CategoryBudget.query.filter_by(user_id=user.id).all()}
+    recent_audits = LoginAudit.query.filter_by(user_id=user.id).order_by(LoginAudit.created_at.desc()).limit(5).all()
+    return render_template('profile.html', user=user, cats=CATS, budgets=budgets, audits=recent_audits)
