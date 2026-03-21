@@ -1,11 +1,16 @@
+import os
 from flask import Flask
 from .config import Config
 from .extensions import db, mail, oauth
 
+# Resolve paths relative to this file so they work both locally and on Render
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_FRONTEND_DIR = os.path.join(_BASE_DIR, 'frontend')
+
 def create_app(config_class=Config):
-    app = Flask(__name__, 
-                template_folder='../frontend/templates',
-                static_folder='../frontend/static')
+    app = Flask(__name__,
+                template_folder=os.path.join(_FRONTEND_DIR, 'templates'),
+                static_folder=os.path.join(_FRONTEND_DIR, 'static'))
     app.config.from_object(config_class)
     
     # Initialize extensions

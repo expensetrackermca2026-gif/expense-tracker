@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-4 mt-2">
+    <div class="col-lg-4">
+        <div class="dashboard-card p-4 shadow-sm mb-4">
+            <h5 class="fw-bold mb-3 text-primary">Add Log</h5>
+            <form id="addExpenseForm" action="/add" method="POST">
+                <input type="text" name="title" class="form-control mb-2" placeholder="Item Name" required>
+                <input type="number" name="amount" class="form-control mb-2" placeholder="0.00" required step="0.01">
+                <select name="category" class="form-select mb-3">
+                    {% for c in cats %}<option>{{ c }}</option>{% endfor %}
+                </select>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="include_total" checked>
+                    <label class="form-check-label small text-muted">Include in overall summary?</label>
+                </div>
+                {% if in_group %}
+                <div class="form-check form-switch mb-4">
+                    <input class="form-check-input" type="checkbox" name="is_shared" id="is_shared">
+                    <label class="form-check-label small fw-bold text-success">Post to Family Group 🏠</label>
+                </div>
+                {% endif %}
+                <input type="hidden" name="force_submit" id="force_submit" value="false">
+                <button type="submit" class="btn btn-grad-primary w-100 fw-bold py-2 shadow" id="addExpenseBtn">Save✨</button>
+            </form>
+        </div>
+        <div class="dashboard-card p-3 text-center">
+            <div id="chartData" data-labels='{{ pie_labels|tojson|safe }}' data-values='{{ pie_values|tojson|safe }}'
+                style="display:none;"></div>
+            <canvas id="pieChart"></canvas>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="row mb-3 g-2 text-center">
+            <div class="col-6">
+                <div class="dashboard-card p-3 border-start border-success border-5">
+                    <small>RECEIVED</small>
+                    <h4 class="text-success fw-bold">₹ {{ m_received }}</h4>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="dashboard-card p-3 border-start border-primary border-5">
+                    <small>PAID</small>
+                    <h4 class="text-primary fw-bold">₹ {{ m_paid }}</h4>
+                </div>
+            </div>
+        </div>
+        <div class="dashboard-card p-4 shadow-lg">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0 text-primary">History</h5>
+                <div class="d-flex gap-2">
+                    <a href="/api/export/csv" class="btn btn-sm btn-outline-success border-2 shadow-sm"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</a>
+                    <a href="/api/export/pdf" class="btn btn-sm btn-outline-danger border-2 shadow-sm"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+                </div>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; border-radius: 10px;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="sticky-top bg-dark">
+                        <tr class="small text-uppercase">
+                            <th>Date</th>
+                            <th>Item</th>
+                            <th class="text-end">Amount</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in expenses %}
+                        <tr class="border-bottom border-secondary-subtle">
+                            <td>{{ e.expense_date.strftime('%b %d') if e.expense_date else 'N/A' }}</td>
+                            <td class="fw-bold">{{ e.title }}</td>
+                            <td
+                                class="fw-bold text-end {% if e.type == 'Received' %}text-success{% else %}text-white{% endif %}">
+                                ₹{{ e.amount }}</td>
+                            <td><button onclick="confirmDelete('{{ e.id }}')" class="btn text-danger">✕</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    function confirmDelete(id) {
+        Swal.fire({
+            title: 'Delete?',
+            text: "Do you want to remove this?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes',
+            background: '#1e293b',
+            color: '#fff'
+        }).then((r) => {
+            if (r.isConfirmed) window.location.href = "/delete/" + id;
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('addExpenseForm');
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('addExpenseBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = 'Saving...';
+            btn.disabled = true;
+
+            const formData = new FormData(form);
+            
+            try {
+                const response = await fetch('/add', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData
+                });
+                
+                if (response.status === 403) {
+                    const data = await response.json();
+                    
+                    Swal.fire({
+                        title: '⚠️ Budget Exceeded!',
+                        text: data.message || "You are over the budget limit for this category.",
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Bypass & Save',
+                        cancelButtonText: 'Cancel',
+                        background: '#1e293b',
+                        color: '#fff',
+                        confirmButtonColor: '#ef4444'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            document.getElementById('force_submit').value = 'true';
+                            form.submit(); // Standard submit to redirect
+                        } else {
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                        }
+                    });
+                } else if (response.ok) {
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', 'Something went wrong', 'error');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch(err) {
+                console.error(err);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        const chartDataEl = document.getElementById('chartData');
+        const pieLabels = JSON.parse(chartDataEl.dataset.labels);
+        const pieValues = JSON.parse(chartDataEl.dataset.values);
+
+        new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: {
+                labels: pieLabels,
+                datasets: [{
+                    data: pieValues,
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+                }]
+            },
+            options: {
+                cutout: '75%',
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
