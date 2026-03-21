@@ -10,3 +10,4 @@ authlib
 google-generativeai
 gunicorn
 reportlab
+pandas
