@@ -21,6 +21,8 @@ _spec = importlib.util.spec_from_file_location(
     os.path.join(_root, '__init__.py'),
     submodule_search_locations=[_root]
 )
+# Explicitly set __file__ so __init__.py can use it to resolve paths
+_backend_pkg.__file__ = os.path.join(_root, '__init__.py')
 _spec.loader.exec_module(_backend_pkg)
 # ────────────────────────────────────────────────────────────────────────────
 
