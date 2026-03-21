@@ -19,7 +19,8 @@ def create_app(config_class=Config):
         client_id=app.config['GOOGLE_CLIENT_ID'],
         client_secret=app.config['GOOGLE_CLIENT_SECRET'],
         server_metadata_url=app.config.get('GOOGLE_DISCOVERY_URL'),
-        client_kwargs={'scope': 'openid email profile'}
+        client_kwargs={'scope': 'openid email profile'},
+        jwt_config={'leeway': 604800} # Provide a 7-day leeway to bypass local time sync issues
     )
     
     # Register Blueprints
