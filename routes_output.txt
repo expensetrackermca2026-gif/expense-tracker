@@ -1,0 +1,54 @@
+﻿.\venv\Scripts\python : C:\Us
+ers\majeed\Downloads\expenses
+-tracker-new-main\backend\uti
+ls.py:10: FutureWarning: 
+At line:1 char:23
++ ... NPATH=".."; 
+.\venv\Scripts\python 
+scripts\check_routes.py *>&1 
+| Out- ...
++                 ~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (C:\User  
+  s\majeed...FutureWarning   
+ : :String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+
+All support for the 
+`google.generativeai` 
+package has ended. It will 
+no longer be receiving 
+updates or bug fixes. Please 
+switch to the `google.genai` 
+package as soon as possible.
+See README for more details:
+
+https://github.com/google-gem
+ini/deprecated-generative-ai-
+python/blob/main/README.md
+
+  import google.generativeai 
+as genai
+static: /static/<path:filename>
+auth.signup: /signup
+auth.verify: /verify
+auth.login: /login
+auth.logout: /logout
+auth.google_login: /login/google
+auth.google_authorize: /login/google/authorize
+main.index: /
+main.dashboard_stats: /api/dashboard/stats
+main.profile: /profile
+transactions.add_expense: /add
+transactions.delete_expense: /delete/<id>
+transactions.parser: /parser
+transactions.receipts: /receipts
+transactions.analyze_receipt: /api/receipt/analyze
+transactions.manual: /manual
+savings.index: /savings
+savings.recommend: /api/savings/recommend
