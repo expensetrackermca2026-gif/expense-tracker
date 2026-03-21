@@ -1,10 +1,16 @@
 import os
+import sys
 from flask import Flask
 from .config import Config
 from .extensions import db, mail, oauth
 
-# Resolve paths relative to this file so they work both locally and on Render
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Resolve the base directory — __file__ is unavailable when loaded via importlib.exec_module
+try:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    # Fallback for Render: wsgi.py registers 'backend' in sys.modules with __path__ set to [repo_root]
+    _BASE_DIR = sys.modules['backend'].__path__[0]
+
 _FRONTEND_DIR = os.path.join(_BASE_DIR, 'frontend')
 
 def create_app(config_class=Config):
