@@ -10,8 +10,11 @@ from datetime import datetime
 bp = Blueprint('main', __name__)
 
 @bp.app_context_processor
-def inject_ai_status():
-    return dict(ai_active=bool(os.getenv('GOOGLE_API_KEY')))
+def inject_site():
+    return {
+        'ai_active': bool(os.getenv('GOOGLE_API_KEY')),
+        'google_site_verification': os.getenv('GOOGLE_SITE_VERIFICATION')
+    }
 
 @bp.route('/')
 def index():
@@ -116,6 +119,33 @@ def dashboard_stats():
         "current_balance": float(summary.current_balance),
         "goal_progress": float((summary.current_balance / user.savings_goal * 100)) if user.savings_goal > 0 else 0
     }
+
+@bp.route('/robots.txt')
+def robots():
+    return "User-agent: *\nDisallow: /api/\nDisallow: /login\nDisallow: /signup\nSitemap: " + request.url_root + "sitemap.xml"
+
+@bp.route('/google28e70e2139ebef6b.html')
+def google_verify():
+    return "google-site-verification: google28e70e2139ebef6b.html"
+
+@bp.route('/sitemap.xml')
+def sitemap():
+    pages = []
+    # Static pages
+    pages.append([request.url_root, datetime.now().strftime("%Y-%m-%d")])
+    pages.append([request.url_root + 'login', datetime.now().strftime("%Y-%m-%d")])
+    pages.append([request.url_root + 'signup', datetime.now().strftime("%Y-%m-%d")])
+    
+    xml_sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_sitemap += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for page in pages:
+        xml_sitemap += '  <url>\n'
+        xml_sitemap += f'    <loc>{page[0]}</loc>\n'
+        xml_sitemap += f'    <lastmod>{page[1]}</lastmod>\n'
+        xml_sitemap += '  </url>\n'
+    xml_sitemap += '</urlset>'
+    
+    return xml_sitemap, {'Content-Type': 'application/xml'}
 
 @bp.route('/profile', methods=['GET', 'POST'])
 def profile():
