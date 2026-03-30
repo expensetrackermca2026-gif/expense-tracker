@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}Smart Savings Recommendation | Expense Analyzer{% endblock %}
+
+{% block content %}
+<style>
+    .savings-page { max-width: 900px; margin: 0 auto; padding-bottom: 60px; }
+    .page-hero h1 { background: linear-gradient(135deg, var(--accent), #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    
+    .input-card, .result-hero-card, .breakdown-card, .history-table-wrap, .ft-modal {
+        background: var(--card-bg) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+    }
+    
+    .income-input-wrap { background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .income-prefix { background: rgba(var(--accent-rgb), 0.1); border-right: 1px solid var(--border); color: var(--accent); }
+    .income-field { background: transparent; border: none; outline: none; color: var(--text); padding: 12px; }
+    
+    .btn-calculate { background: var(--accent); color: white; border: none; border-radius: 12px; padding: 16px; font-weight: 700; transition: all 0.3s; }
+    .btn-calculate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 24px var(--accent-glow); }
+    
+    .bd-amount { color: var(--text); }
+    .bd-bar-track { background: var(--border); }
+    
+    .ia-title { color: var(--accent); }
+    .insight-alert { background: rgba(var(--accent-rgb), 0.05); border-color: rgba(var(--accent-rgb), 0.1); }
+    
+    .history-table th { background: var(--panel-bg); color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .history-table td { border-bottom: 1px solid var(--border); }
+    .td-savings { color: var(--accent); font-weight: 700; }
+    
+    /* Progress bars */
+    .bd-bar-fill.needs { background: linear-gradient(90deg, var(--accent), #818cf8); }
+    .bd-bar-fill.wants { background: linear-gradient(90deg, #f59e0b, #f97316); }
+    .bd-bar-fill.savings { background: linear-gradient(90deg, #10b981, #34d399); }
+    
+    .ft-modal-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); }
+
+    /* New Modern Premium UI Styling */
+    .hover-card {
+        cursor: pointer;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        position: relative;
+        overflow: hidden;
+    }
+    .hover-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 10px 40px rgba(var(--accent-rgb), 0.15) !important;
+        border-color: rgba(var(--accent-rgb), 0.3) !important;
+    }
+    .hover-card::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(circle at center, rgba(var(--accent-rgb), 0.1) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+    }
+    .hover-card:hover::after { opacity: 1; }
+
+    /* Modal Styling */
+    .insight-modal-overlay {
+        position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 1050; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    .insight-modal-overlay.active { opacity: 1; pointer-events: auto; }
+    
+    .insight-modal {
+        background: rgba(15, 23, 42, 0.85); /* dark glassmorphism */
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        border-radius: 20px; width: 90%; max-width: 500px; padding: 24px;
+        transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        color: white; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        max-height: 90vh; overflow-y: auto;
+    }
+    .insight-modal-overlay.active .insight-modal { transform: scale(1); }
+
+    .cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+    .cat-item {
+        display: flex; align-items: center; gap: 8px;
+        background: rgba(255, 255, 255, 0.05); padding: 10px 14px;
+        border-radius: 12px; font-size: 0.85rem; font-weight: 600;
+        border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s;
+    }
+    .cat-item:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.15); }
+    
+    .modal-close-btn {
+        background: rgba(255,255,255,0.1); border: none; color: white;
+        width: 32px; height: 32px; border-radius: 50%; display: flex;
+        justify-content: center; align-items: center; cursor: pointer; transition: all 0.2s;
+    }
+    .modal-close-btn:hover { background: rgba(239, 68, 68, 0.8); }
+
+    .ai-insight-box {
+        background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.02));
+        border: 1px solid rgba(var(--accent-rgb), 0.2);
+        border-radius: 16px; padding: 16px; margin-top: 20px;
+    }
+</style>
+
+<div class="savings-page">
+    <div class="page-hero animate__animated animate__fadeInDown">
+        <h1 class="fw-900">Smart Savings Plan</h1>
+        <p>Harness the power of AI to optimize your income allocation using the 50/30/20 framework.</p>
+    </div>
+
+    <div class="input-card animate__animated animate__fadeInUp">
+        <h5 class="mb-4"><i class="bi bi-lightning-charge-fill me-2" style="color:var(--accent);"></i> Income Analysis</h5>
+        <form id="savingsForm">
+            <span class="small text-muted d-block mb-2 text-uppercase fw-bold" style="letter-spacing:1px;">Enter Monthly Income</span>
+            <div class="income-input-wrap d-flex align-items-center">
+                <div class="income-prefix px-4 py-3 fw-800">₹</div>
+                <input type="number" id="incomeInput" class="income-field px-4 py-3 flex-grow-1" placeholder="Enter Amount" required style="font-size:20px; font-weight:700;">
+            </div>
+            <button type="submit" class="btn-calculate w-100 mt-4 shadow" id="submitBtn">Get My AI Savings Plan 🚀</button>
+        </form>
+    </div>
+
+    <div id="resultsSection" style="display: none;">
+        <div class="result-hero-card hover-card animate__animated animate__fadeInUp p-4 rounded-4" onclick="openInsightModal('savings')" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), transparent) !important; border-color: rgba(16, 185, 129, 0.2) !important;">
+            <div class="small fw-800 text-uppercase mb-2" style="color:#10b981; letter-spacing:2px;">RECOMMENDED SAVINGS (20%) <i class="bi bi-info-circle ms-1 opacity-50"></i></div>
+            <div class="display-3 fw-900 text-white">₹<span id="savingsAmount">0</span></div>
+            <p class="text-muted mt-2 mb-2">This is your calculated 20% target for wealth creation.</p>
+            <div class="bd-bar-track mt-3"><div class="bd-bar-fill savings" style="width: 20%; height:8px; border-radius:4px;"></div></div>
+        </div>
+        
+        <div class="row g-3 mt-3">
+            <div class="col-6">
+                <div class="breakdown-card text-start p-4 hover-card h-100 rounded-4" onclick="openInsightModal('needs')" style="background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.05), transparent) !important; border-color: rgba(var(--accent-rgb), 0.2) !important;">
+                    <small class="fw-800 text-primary d-block mb-1">NEEDS (50%) <i class="bi bi-info-circle ms-1 opacity-50"></i></small>
+                    <h4 class="fw-900 text-white">₹<span id="needsAmount">0</span></h4>
+                    <div class="bd-bar-track mt-3"><div class="bd-bar-fill needs" style="width: 50%; height:6px; border-radius:3px;"></div></div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="breakdown-card text-start p-4 hover-card h-100 rounded-4" onclick="openInsightModal('wants')" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), transparent) !important; border-color: rgba(245, 158, 11, 0.2) !important;">
+                    <small class="fw-800 text-warning d-block mb-1">WANTS (30%) <i class="bi bi-info-circle ms-1 opacity-50"></i></small>
+                    <h4 class="fw-900 text-white">₹<span id="wantsAmount">0</span></h4>
+                    <div class="bd-bar-track mt-3"><div class="bd-bar-fill wants" style="width: 30%; height:6px; border-radius:3px;"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="insight-alert animate__animated animate__fadeIn rounded-4 p-4 mb-4">
+            <h5 class="fw-bold mb-2"><i class="bi bi-stars me-2"></i>AI Strategic Insight</h5>
+            <p class="mb-0" id="breakdownExplanation" style="line-height:1.6;"></p>
+        </div>
+
+        <div class="history-table-wrap mt-5">
+            <div class="p-4 border-bottom">
+                 <h5 class="fw-bold mb-0">Analysis History</h5>
+            </div>
+            <table class="history-table w-100">
+                <thead>
+                    <tr class="text-muted small text-uppercase fw-bold">
+                        <th class="p-3 ps-4">Date</th>
+                        <th class="p-3">Income</th>
+                        <th class="p-3">Savings Target</th>
+                        <th class="p-3 pe-4">Strategy</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr><td colspan="4" class="p-5 text-center text-muted">No historical data available yet.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Dynamic Detailed Modal Popup -->
+<div id="insightModalOverlay" class="insight-modal-overlay" onclick="closeInsightModal(event)">
+    <div class="insight-modal shadow-lg" id="insightModalContent" onclick="event.stopPropagation()">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <h4 class="fw-900 mb-0 d-flex align-items-center gap-2" id="modalTitle">
+               Title
+            </h4>
+            <button class="modal-close-btn" onclick="closeInsightModal()"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <p class="text-muted small mb-3" id="modalSubtitle">Category explanation</p>
+
+        <!-- Amount & Progress -->
+        <div class="p-3 rounded-4 mb-3" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1);">
+            <div class="d-flex justify-content-between align-items-end mb-2">
+                <div>
+                    <div class="small text-muted fw-bold mb-1 text-uppercase">Allocated Amount</div>
+                    <div class="fs-2 fw-900 text-white" id="modalAmount">₹0</div>
+                </div>
+                <div class="text-end">
+                    <div class="fs-5 fw-bold" id="modalPercent" style="color: var(--accent);">50%</div>
+                </div>
+            </div>
+            <div class="bd-bar-track mt-2" style="height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1);">
+                <div class="bd-bar-fill" id="modalBar" style="width: 50%; height: 100%; border-radius: 3px; background: var(--accent);"></div>
+            </div>
+        </div>
+
+        <!-- Categories Grid -->
+        <div class="small fw-bold text-uppercase text-muted mb-2 ps-1">Included Categories</div>
+        <div class="cat-grid mb-2" id="modalCategories">
+            <!-- Injected dynamically -->
+        </div>
+
+        <!-- AI Insight Box -->
+        <div class="ai-insight-box position-relative overflow-hidden">
+            <div class="d-flex gap-2 align-items-center mb-2">
+                <i class="bi bi-stars text-warning fs-5 animate__animated animate__pulse animate__infinite"></i>
+                <h6 class="fw-bold mb-0 text-white">AI Financial Insight</h6>
+            </div>
+            <p class="small mb-0 text-white-50" id="modalAiText">
+                <span class="spinner-border spinner-border-sm me-2 text-warning" role="status"></span> Generating insight...
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('savingsForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const incomeInput = document.getElementById('incomeInput');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const income = parseFloat(incomeInput.value);
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Analyzing...';
+
+            try {
+                const res = await fetch('/api/savings/recommend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ income })
+                });
+                const data = await res.json();
+                displayResults(data);
+                addToHistory(data);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Get My AI Savings Plan 🚀';
+            }
+        });
+
+        function displayResults(data) {
+            lastCalculated = data;
+            aiInsightsCache = null;
+            const sec = document.getElementById('resultsSection');
+            sec.style.display = 'block';
+            document.getElementById('savingsAmount').textContent = data.savings.toLocaleString();
+            document.getElementById('needsAmount').textContent = data.needs.toLocaleString();
+            document.getElementById('wantsAmount').textContent = data.wants.toLocaleString();
+            document.getElementById('breakdownExplanation').textContent = data.explanation;
+            sec.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function addToHistory(data) {
+            const tbody = document.getElementById('historyTableBody');
+            if (tbody.rows[0] && tbody.rows[0].cells.length === 1) tbody.innerHTML = '';
+            const row = tbody.insertRow(0);
+            row.innerHTML = `
+                <td class="p-3 ps-4 small font-monospace">${new Date().toLocaleDateString()}</td>
+                <td class="p-3 fw-bold">₹${data.income.toLocaleString()}</td>
+                <td class="p-3 td-savings">₹${data.savings.toLocaleString()}</td>
+                <td class="p-3 pe-4 small text-muted">${data.explanation.substring(0, 50)}...</td>
+            `;
+        }
+    });
+
+    let lastCalculated = { income: 0, needs: 0, wants: 0, savings: 0 };
+    let aiInsightsCache = null;
+
+    async function openInsightModal(type) {
+        const overlay = document.getElementById('insightModalOverlay');
+        const mTitle = document.getElementById('modalTitle');
+        const mSub = document.getElementById('modalSubtitle');
+        const mAmount = document.getElementById('modalAmount');
+        const mPercent = document.getElementById('modalPercent');
+        const mBar = document.getElementById('modalBar');
+        const mGrid = document.getElementById('modalCategories');
+        const mAi = document.getElementById('modalAiText');
+
+        // Reset AI text
+        mAi.innerHTML = '<span class="spinner-border spinner-border-sm me-2 text-warning" role="status"></span> Generating insight...';
+
+        const configs = {
+            'needs': {
+                title: 'Essential Expenses – Needs', icon: '<i class="bi bi-house-heart"></i>', color: '#6366f1',
+                sub: 'Items essential for living and working.', percent: '50%', amt: lastCalculated.needs,
+                cats: [
+                    '🏠 Rent / EMI', '🛒 Groceries', '💡 Electricity & Water',
+                    '🌐 Internet & Mobile', '🏥 Medical', '⛽ Transport', '📚 Education', '🛡️ Insurance'
+                ]
+            },
+            'wants': {
+                title: 'Lifestyle – Wants', icon: '<i class="bi bi-gem text-warning"></i>', color: '#f59e0b',
+                sub: 'Discretionary spending for lifestyle & fun.', percent: '30%', amt: lastCalculated.wants,
+                cats: [
+                    '🍽️ Dining Out', '🛍️ Clothes', '🎬 Movies & OTT',
+                    '✈️ Travel', '☕ Cafes', '🎁 Gifts', '📱 Gadgets', '💅 Beauty'
+                ]
+            },
+            'savings': {
+                title: 'Wealth Creation – Savings', icon: '<i class="bi bi-piggy-bank text-success"></i>', color: '#10b981',
+                sub: 'Funds for future goals and emergencies.', percent: '20%', amt: lastCalculated.savings,
+                cats: [
+                    '🏦 Emergency Fund', '📈 Stocks / Mutual Funds', '🏅 Gold / FD', '🏡 Real Estate Downpayment'
+                ]
+            }
+        };
+
+        const conf = configs[type];
+        mTitle.innerHTML = conf.icon + ' ' + conf.title;
+        mTitle.style.color = conf.color;
+        mSub.innerText = conf.sub;
+        mAmount.innerText = '₹' + conf.amt.toLocaleString();
+        mPercent.innerText = conf.percent;
+        mPercent.style.color = conf.color;
+        mBar.style.width = conf.percent;
+        mBar.style.background = conf.color;
+
+        mGrid.innerHTML = conf.cats.map(c => `<div class="cat-item">${c}</div>`).join('');
+        overlay.classList.add('active');
+
+        // Fetch AI Insight if we have valid calculations
+        if (lastCalculated.income > 0) {
+            if (!aiInsightsCache) {
+                try {
+                    const res = await fetch('/api/savings/modal_insight', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(lastCalculated)
+                    });
+                    aiInsightsCache = await res.json();
+                } catch(e) { console.error(e); }
+            }
+            
+            if (aiInsightsCache) {
+                if(type === 'needs') mAi.innerHTML = `<strong>Tip:</strong> ${aiInsightsCache.tip}`;
+                else if(type === 'wants') mAi.innerHTML = `<strong>Warning:</strong> ${aiInsightsCache.warning}`;
+                else mAi.innerHTML = `<strong>Goal:</strong> Automate your 20% savings first before spending on needs and wants.`;
+            } else {
+                mAi.innerHTML = 'Stay disciplined to achieve your financial goals.';
+            }
+        } else {
+            mAi.innerHTML = 'Please calculate your savings plan first to get AI insights.';
+        }
+    }
+
+    function closeInsightModal(e) {
+        if (e && e.target !== document.getElementById('insightModalOverlay') && !e.target.closest('.modal-close-btn')) return;
+        document.getElementById('insightModalOverlay').classList.remove('active');
+    }
+</script>
+{% endblock %}

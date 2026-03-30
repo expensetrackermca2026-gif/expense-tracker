@@ -20,7 +20,7 @@ class Config:
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
     
     # Adjusted path for uploads in the new frontend folder
-    UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, '..', 'frontend', 'static', 'uploads'))
+    UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'frontend', 'static', 'uploads'))
     
     GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
     GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')

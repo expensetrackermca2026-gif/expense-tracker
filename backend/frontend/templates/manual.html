@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .form-control, .form-select {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+    }
+    .form-control:focus, .form-select:focus {
+        background: var(--input-bg);
+        border-color: var(--accent);
+        color: var(--text);
+        box-shadow: 0 0 0 0.25rem var(--accent-glow);
+    }
+    .table { color: var(--text); }
+    .table-hover tbody tr:hover { background: rgba(var(--accent-rgb), 0.05); color: var(--text); }
+    .btn-grad-primary { background: var(--accent); color: white; border: none; }
+    .btn-grad-primary:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+</style>
+
+<div class="row g-4 mt-2">
+    <div class="col-lg-4">
+        <div class="dashboard-card p-4 mb-4">
+            <h5 class="fw-bold mb-4" style="color: var(--accent);">Add New Transaction</h5>
+            <form id="addExpenseForm" action="/add" method="POST">
+                <div class="mb-3">
+                    <label class="small text-muted mb-1">Item Title</label>
+                    <input type="text" name="title" class="form-control" placeholder="e.g. Groceries" required>
+                </div>
+                <div class="mb-3">
+                    <label class="small text-muted mb-1">Amount (₹)</label>
+                    <input type="number" name="amount" class="form-control" placeholder="0.00" required step="0.01">
+                </div>
+                <div class="mb-3">
+                    <label class="small text-muted mb-1">Category</label>
+                    <select name="category" class="form-select">
+                        {% for c in cats %}<option>{{ c }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" name="include_total" checked>
+                    <label class="form-check-label small text-muted">Include in overall summary?</label>
+                </div>
+                <input type="hidden" name="force_submit" id="force_submit" value="false">
+                <button type="submit" class="btn btn-grad-primary w-100 fw-bold py-3 shadow" id="addExpenseBtn">Save Transaction ✨</button>
+            </form>
+        </div>
+        <div class="dashboard-card p-4 text-center">
+            <div id="chartData" data-labels='{{ pie_labels|tojson|safe }}' data-values='{{ pie_values|tojson|safe }}' style="display:none;"></div>
+            <canvas id="pieChart" height="200"></canvas>
+            <p class="small text-muted mt-3">Monthly Category Breakdown</p>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="row mb-4 g-3 text-center">
+            <div class="col-6">
+                <div class="dashboard-card p-4 border-start border-success border-5">
+                    <small class="text-muted">TOTAL RECEIVED</small>
+                    <h3 class="fw-bold mt-1" style="color: #10b981;">₹ {{ "{:,.2f}".format(m_received) }}</h3>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="dashboard-card p-4 border-start border-5" style="border-color: var(--accent) !important;">
+                    <small class="text-muted">TOTAL PAID</small>
+                    <h3 class="fw-bold mt-1" style="color: var(--accent);">₹ {{ "{:,.2f}".format(m_paid) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="dashboard-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold mb-0">Transaction History</h5>
+                <div class="d-flex gap-2">
+                    <a href="/api/export/csv" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</a>
+                    <a href="/api/export/pdf" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+                </div>
+            </div>
+            <div style="max-height: 500px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border);">
+                <table class="table table-hover align-middle mb-0">
+                    <thead style="background: var(--panel-bg);">
+                        <tr class="small text-uppercase text-muted">
+                            <th class="ps-3">Date</th>
+                            <th>Item</th>
+                            <th class="text-end pe-3">Amount</th>
+                            <th style="width: 50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in expenses %}
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td class="ps-3 small text-muted">{{ e.expense_date.strftime('%b %d') if e.expense_date else 'N/A' }}</td>
+                            <td class="fw-bold">{{ e.title }}</td>
+                            <td class="fw-bold text-end pe-3" style="color: {% if e.type == 'Received' %}#10b981{% else %}var(--text){% endif %};">
+                                ₹{{ "{:,.2f}".format(e.amount) }}
+                            </td>
+                            <td><button onclick="confirmDelete('{{ e.id }}')" class="btn btn-link text-danger p-0" title="Delete">✕</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function confirmDelete(id) {
+        Swal.fire({
+            title: 'Delete Transaction?',
+            text: "This cannot be undone.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Delete',
+            background: 'var(--card-bg)',
+            color: 'var(--text)',
+            confirmButtonColor: '#ef4444'
+        }).then((r) => {
+            if (r.isConfirmed) window.location.href = "/delete/" + id;
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('addExpenseForm');
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('addExpenseBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+            btn.disabled = true;
+
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('/add', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData
+                });
+                
+                if (response.status === 403) {
+                    const data = await response.json();
+                    Swal.fire({
+                        title: '⚠️ Budget Exceeded!',
+                        text: data.message || "You are over the budget limit for this category.",
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Bypass & Save',
+                        cancelButtonText: 'Cancel',
+                        background: 'var(--card-bg)',
+                        color: 'var(--text)',
+                        confirmButtonColor: '#ef4444'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            document.getElementById('force_submit').value = 'true';
+                            form.submit();
+                        } else {
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                        }
+                    });
+                } else if (response.ok) {
+                    window.location.reload();
+                } else {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            } catch(err) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        const accentColor = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+        const chartDataEl = document.getElementById('chartData');
+        const pieLabels = JSON.parse(chartDataEl.dataset.labels);
+        const pieValues = JSON.parse(chartDataEl.dataset.values);
+
+        new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: {
+                labels: pieLabels,
+                datasets: [{
+                    data: pieValues,
+                    backgroundColor: ['#4f8ef7', '#10b981', '#f59e0b', '#ef4444', '#a78bfa', '#14b8a6', '#f43f5e', '#8b5cf6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                cutout: '70%',
+                plugins: { legend: { display: false } }
+            }
+        });
+    });
+</script>
+{% endblock %}

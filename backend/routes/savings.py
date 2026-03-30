@@ -85,3 +85,33 @@ def recommend():
     db.session.commit()
     
     return jsonify(breakdown)
+
+@bp.route('/api/savings/modal_insight', methods=['POST'])
+def modal_insight():
+    if 'user_id' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json()
+    income = data.get('income')
+    needs = data.get('needs')
+    wants = data.get('wants')
+    
+    import google.generativeai as genai
+    import os
+    api_key = os.getenv('GOOGLE_API_KEY')
+    if not api_key:
+        return jsonify({"tip": "Follow the 50/30/20 rule for financial stability.", "warning": "Manage your expenses carefully."})
+        
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        prompt = f"Based on monthly income ₹{income}, needs ₹{needs}, wants ₹{wants}, give financial advice in strictly 2 short lines. Line 1: Tip for needs. Line 2: Warning for wants."
+        response = model.generate_content(prompt)
+        lines = [line.strip() for line in response.text.strip().split('\n') if line.strip()]
+        
+        tip = lines[0] if len(lines) > 0 else "Prioritize your essential needs first."
+        warning = lines[1] if len(lines) > 1 else "Spending too much on wants reduces savings."
+        
+        return jsonify({"tip": tip.replace('- ', '').replace('*', ''), "warning": warning.replace('- ', '').replace('*', '')})
+    except Exception as e:
+        return jsonify({"tip": "Follow the 50/30/20 rule to maintain financial stability.", "warning": "Spending too much on wants may reduce savings potential."})

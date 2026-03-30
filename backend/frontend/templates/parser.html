@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .form-control { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); }
+    .form-control:focus { background: var(--input-bg); border-color: var(--accent); color: var(--text); box-shadow: 0 0 0 0.25rem var(--accent-glow); }
+    .btn-grad-primary { background: var(--accent); color: white; border: none; }
+    .list-group-item { background: transparent; border-color: var(--border); color: var(--text); }
+    .list-group-item:hover { background: rgba(var(--accent-rgb), 0.05); color: var(--accent); }
+    .sticky-top { background: var(--card-bg) !important; color: var(--text-muted); opacity: 0.95; backdrop-filter: blur(5px); }
+    .tx-row:hover { background: rgba(var(--accent-rgb), 0.05); }
+    #parserLoading { border-radius: 20px; }
+</style>
+
+<div class="row mt-4">
+    <!-- LEFT PANEL: UPLOAD & SUMMARY -->
+    <div class="col-md-5">
+        <div class="dashboard-card p-4 shadow-lg mb-4 animate__animated animate__fadeInLeft position-relative overflow-hidden">
+            <div id="parserLoading"
+                style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--nav-bg); z-index: 100; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(10px);">
+                <div class="spinner-grow" style="color: var(--accent);" role="status"></div>
+                <h5 class="mt-4 fw-bold" style="color: var(--accent);">AI Parsing Statement... ⏳</h5>
+                <p class="small text-muted">Scanning transactions & extracting data</p>
+            </div>
+            <h4 class="fw-bold mb-2" style="color: var(--accent);">Monthly Statement Parser</h4>
+            <p class="text-muted small">Upload your latest Bank PDF. Previous statements will be safely archived.</p>
+            <form action="/parser" method="POST" enctype="multipart/form-data" class="mt-4"
+                onsubmit="document.getElementById('parserLoading').style.display='flex'">
+                <div class="mb-4">
+                    <label class="small text-muted mb-2">Select Statement PDF</label>
+                    <input type="file" name="statement" class="form-control py-2" accept=".pdf" required>
+                </div>
+                <button type="submit" class="btn btn-grad-primary w-100 py-3 fw-bold shadow">Process New Statement 🚀</button>
+            </form>
+        </div>
+
+        <div class="row mb-4 g-3 animate__animated animate__fadeInLeft" style="animation-delay: 0.1s;">
+            <div class="col-6">
+                <div class="dashboard-card p-4 text-center border-start border-success border-5">
+                    <small class="text-muted text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 1px;">Received</small>
+                    <h4 class="fw-bold mb-0 mt-1" style="color: #10b981;">₹ {{ "{:,.2f}".format(p_received) }}</h4>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="dashboard-card p-4 text-center border-start border-danger border-5">
+                    <small class="text-muted text-uppercase fw-bold" style="font-size: 10px; letter-spacing: 1px;">Paid</small>
+                    <h4 class="fw-bold mb-0 mt-1" style="color: #ef4444;">₹ {{ "{:,.2f}".format(p_paid) }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-card p-4 animate__animated animate__fadeInLeft" style="animation-delay: 0.2s;">
+            <h5 class="fw-bold mb-4 d-flex justify-content-between align-items-center">
+                <span>Statement History 🗄️</span>
+                <span class="badge rounded-pill px-3" style="background: var(--accent); color: white;" id="historyCount">0</span>
+            </h5>
+            <div class="list-group list-group-flush" id="historyList" style="max-height: 300px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border);">
+                <div class="text-center text-muted small py-4" id="historyLoader">
+                    <span class="spinner-border spinner-border-sm me-2"></span>Loading archives...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL: TRANSACTIONS TABLE -->
+    <div class="col-md-7">
+        <div class="dashboard-card p-4 animate__animated animate__fadeInRight h-100 d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold mb-0" id="currentViewTitle" style="color: var(--accent);">Current Active Statement</h5>
+                <button class="btn btn-sm btn-outline-secondary d-none px-3" id="btnBackToCurrent" onclick="showCurrent()">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Current
+                </button>
+            </div>
+
+            <div class="input-group mb-4">
+                <span class="input-group-text bg-transparent border-end-0" style="border-color: var(--border); color: var(--text-muted);">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" id="txSearch" class="form-control border-start-0 ps-0"
+                    placeholder="Search across all statements..." onkeyup="filterTable()">
+            </div>
+
+            <div class="flex-grow-1" style="max-height: 600px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px;">
+                <table class="table table-hover align-middle mb-0" id="txTable">
+                    <thead class="sticky-top">
+                        <tr class="small text-uppercase text-muted">
+                            <th class="ps-3 py-3 border-0">Date</th>
+                            <th class="border-0">Description</th>
+                            <th class="text-end py-3 border-0">Amount</th>
+                            <th class="text-center border-0" style="width: 60px;" id="actionHeader">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="txBody">
+                        {% for e in expenses %}
+                        <tr class="tx-row" style="border-bottom: 1px solid var(--border);" data-search="{{ e.date.strftime('%Y-%m-%d') if e.date else '' }} {{ e.description|lower }} {{ e.amount }}">
+                            <td class="ps-3 small text-muted">{{ e.date.strftime('%b %d') if e.date else 'N/A' }}</td>
+                            <td class="fw-bold text-truncate" style="max-width: 200px;" title="{{ e.description }}">{{ e.description }}</td>
+                            <td class="fw-bold text-end" style="color: {% if e.type == 'Received' %}#10b981{% else %}var(--text){% endif %};">
+                                ₹{{ "{:,.2f}".format(e.amount) }}
+                            </td>
+                            <td class="text-center">
+                                <a href="/parser/delete_active/{{ e.id }}" class="btn btn-link text-danger p-0" title="Delete">✕</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-5">No active statement parsed yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentHtml = document.getElementById('txBody').innerHTML;
+    let archivedData = [];
+
+    document.addEventListener("DOMContentLoaded", () => {
+        fetch('/api/statement/history')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('historyCount').innerText = data.total_uploads;
+                const list = document.getElementById('historyList');
+                list.innerHTML = '';
+
+                if (data.total_uploads === 0) {
+                    list.innerHTML = '<div class="text-center text-muted small py-4">No archived statements yet.</div>';
+                }
+
+                data.history.forEach(arc => {
+                    archivedData.push(arc);
+                    const monthNames = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    const monthName = monthNames[arc.statement_month] || "Unknown";
+
+                    const item = document.createElement('a');
+                    item.href = "#";
+                    item.className = "list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3";
+                    item.onclick = (e) => { e.preventDefault(); showArchive(arc.archive_id); };
+
+                    item.innerHTML = `
+                        <div>
+                            <div class="fw-bold mb-1">${monthName} ${arc.statement_year} Statement</div>
+                            <small class="text-muted d-block text-truncate" style="max-width:180px;">${arc.filename}</small>
+                        </div>
+                        <span class="badge rounded-pill bg-opacity-10 bg-info text-info" style="border: 1px solid rgba(0,255,255,0.1)">${arc.total_transactions} tx</span>
+                    `;
+                    list.appendChild(item);
+                });
+            })
+            .catch(err => {
+                document.getElementById('historyList').innerHTML = '<div class="text-danger small py-4 text-center">Failed to load history.</div>';
+            });
+    });
+
+    function showArchive(archiveId) {
+        const arc = archivedData.find(a => a.archive_id === archiveId);
+        if (!arc) return;
+
+        const monthNames = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        document.getElementById('currentViewTitle').innerHTML = `Archived: ${monthNames[arc.statement_month]} ${arc.statement_year}`;
+        document.getElementById('btnBackToCurrent').classList.remove('d-none');
+        document.getElementById('actionHeader').classList.add('d-none');
+
+        let rows = arc.transactions.length === 0 
+            ? '<tr><td colspan="3" class="text-center text-muted py-5">No transactions found.</td></tr>'
+            : '';
+
+        arc.transactions.forEach(t => {
+            const amtClass = t.type === 'Received' ? 'color:#10b981' : '';
+            const dateStr = t.date ? new Date(t.date).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : 'N/A';
+            const searchStr = `${t.date} ${t.description.toLowerCase()} ${t.amount}`;
+
+            rows += `
+                <tr class="tx-row" style="border-bottom: 1px solid var(--border);" data-search="${searchStr}">
+                    <td class="ps-3 small text-muted">${dateStr}</td>
+                    <td class="fw-bold text-truncate" style="max-width: 200px;" title="${t.description}">${t.description}</td>
+                    <td class="fw-bold text-end" style="${amtClass}">₹${parseFloat(t.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+            `;
+        });
+        document.getElementById('txBody').innerHTML = rows;
+        document.getElementById('txSearch').value = '';
+        filterTable();
+    }
+
+    function showCurrent() {
+        document.getElementById('currentViewTitle').innerHTML = `Current Active Statement`;
+        document.getElementById('btnBackToCurrent').classList.add('d-none');
+        document.getElementById('actionHeader').classList.remove('d-none');
+        document.getElementById('txBody').innerHTML = currentHtml;
+        document.getElementById('txSearch').value = '';
+        filterTable();
+    }
+
+    function filterTable() {
+        const query = document.getElementById('txSearch').value.toLowerCase();
+        let foundAny = false;
+
+        document.querySelectorAll('#txBody tr').forEach(row => {
+            const searchable = row.getAttribute('data-search');
+            if (searchable && searchable.includes(query)) {
+                row.style.display = '';
+                foundAny = true;
+            } else if (searchable) {
+                row.style.display = 'none';
+            }
+        });
+    }
+</script>
+{% endblock %}

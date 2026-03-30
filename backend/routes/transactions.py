@@ -50,11 +50,7 @@ def add_expense():
                 if request.headers.get('Accept') == 'application/json' or request.is_json:
                     return {'status': 'budget_exceeded', 'message': warning_msg, 'category': category}, 403
 
-    from ..models import FamilyMember
-    membership = FamilyMember.query.filter_by(user_id=session['user_id']).first()
-    g_id = membership.group_id if membership and 'is_shared' in request.form else None
-
-    new_exp = Expense(user_id=session['user_id'], group_id=g_id, title=title, amount=abs(amount), 
+    new_exp = Expense(user_id=session['user_id'], title=title, amount=abs(amount), 
                       category=category, type="Paid" if amount > 0 else "Received",
                       include_in_total=include_in_total)
     db.session.add(new_exp); db.session.commit()
@@ -431,9 +427,7 @@ def manual():
         d = (datetime.utcnow() - timedelta(days=i)).date()
         amt = db.session.query(func.sum(Expense.amount)).filter_by(user_id=u_id, is_parsed=False, type='Paid').filter(func.date(Expense.expense_date) == d).scalar() or 0
         daily_labels.append(d.strftime('%b %d')); daily_values.append(amt)
-    from ..models import FamilyMember
-    membership = FamilyMember.query.filter_by(user_id=u_id).first()
-    in_group = membership is not None
+    in_group = False
     
     return render_template('manual.html', expenses=expenses, cats=CATS, pie_labels=[r[0] for r in cat_sum], pie_values=[r[1] for r in cat_sum], daily_labels=daily_labels, daily_values=daily_values, m_paid=m_paid, m_received=m_received, sel_cat='All', in_group=in_group)
 

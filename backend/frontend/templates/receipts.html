@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+{% block title %}Digital Vault & Receipt Scanner | Expense Analyzer{% endblock %}
+
+{% block content %}
+<style>
+    .vault-grid {
+        display: grid;
+        grid-template-columns: 380px 1fr;
+        gap: 24px;
+        align-items: start;
+        margin-top: 10px;
+    }
+    @media (max-width: 900px) { .vault-grid { grid-template-columns: 1fr; } }
+
+    /* Theme adaptive inputs */
+    .form-control, .form-select {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 12px 16px;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    .form-control:focus, .form-select:focus {
+        background: var(--input-bg);
+        border-color: var(--accent);
+        color: var(--text);
+        box-shadow: 0 0 0 4px var(--accent-glow);
+    }
+    
+    .btn-grad-primary {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 700;
+        transition: all 0.3s;
+        box-shadow: 0 4px 15px var(--accent-glow);
+    }
+    .btn-grad-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px var(--accent-glow);
+        color: white;
+    }
+
+    .btn-magic {
+        background: rgba(var(--accent-rgb), 0.1);
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 10px;
+        padding: 10px;
+        font-weight: 600;
+        transition: all 0.3s;
+    }
+    .btn-magic:hover {
+        background: var(--accent);
+        color: white;
+        box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    /* AI Highlighting */
+    .ai-glow {
+        box-shadow: 0 0 15px var(--accent-glow) !important;
+        border-color: var(--accent) !important;
+        background: rgba(var(--accent-rgb), 0.05) !important;
+    }
+
+    .ai-badge {
+        font-size: 0.65rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: linear-gradient(135deg, var(--accent), #818cf8);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 8px;
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+    }
+
+    /* Loading Overlay */
+    #loadingOverlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: var(--nav-bg);
+        backdrop-filter: blur(8px);
+        z-index: 50;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        border-radius: 20px;
+    }
+
+    .receipt-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        transition: all 0.3s;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .receipt-card:hover {
+        transform: translateY(-6px);
+        border-color: var(--accent);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    
+    .receipt-image {
+        width: 100%;
+        height: 160px;
+        object-fit: cover;
+        border-bottom: 1px solid var(--border);
+    }
+    
+    .file-input-wrapper {
+        position: relative;
+        border: 2px dashed var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s;
+        background: rgba(0,0,0,0.2);
+    }
+    .file-input-wrapper:hover {
+        border-color: var(--accent);
+        background: rgba(var(--accent-rgb), 0.05);
+    }
+    .file-input-wrapper input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+</style>
+
+<div class="vault-grid">
+    <!-- LEFT PANEL: DIGITAL VAULT UPLOAD FORM -->
+    <div class="left-col">
+        <div class="dashboard-card p-4 position-relative shadow-lg animate__animated animate__fadeInLeft">
+            
+            <div id="loadingOverlay">
+                <div class="spinner-grow mb-3" style="color: var(--accent); width: 3rem; height: 3rem;" role="status"></div>
+                <h5 class="fw-bold" style="color: var(--text);">Magic AI Scan... ✨</h5>
+                <small class="text-muted">Extracting merchant, amount & category</small>
+            </div>
+
+            <div class="d-flex align-items-center mb-4">
+                <h4 class="fw-bold mb-0" style="color: var(--accent);">Digital Vault 🛡️</h4>
+            </div>
+
+            <form id="receiptForm" action="/receipts" method="POST" enctype="multipart/form-data">
+                
+                <div class="mb-3 position-relative">
+                    <label class="small text-muted mb-1 fw-bold text-uppercase">Merchant</label>
+                    <input type="text" name="title" id="title" class="form-control" placeholder="e.g. Starbucks, Amazon" required>
+                    <span id="aiMerchant" class="ai-badge d-none animate__animated animate__fadeIn">AI Detected</span>
+                </div>
+                
+                <div class="mb-3 position-relative">
+                    <label class="small text-muted mb-1 fw-bold text-uppercase">Total Amount</label>
+                    <input type="number" name="amount" id="amount" class="form-control" placeholder="0.00" step="0.01" required>
+                    <span id="aiAmount" class="ai-badge d-none animate__animated animate__fadeIn">AI Detected</span>
+                </div>
+                
+                <div class="mb-4 position-relative">
+                    <label class="small text-muted mb-1 fw-bold text-uppercase">Category</label>
+                    <select name="category" id="category" class="form-select">
+                        <option value="Food & Drinks">Food & Drinks</option>
+                        <option value="Travel">Travel</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Bills">Bills</option>
+                        <option value="Others">Others</option>
+                    </select>
+                    <span id="aiCategory" class="ai-badge d-none animate__animated animate__fadeIn" style="right: 30px;">AI Tagged</span>
+                </div>
+
+                <div class="file-input-wrapper mb-3">
+                    <i class="bi bi-cloud-arrow-up display-5 text-muted mb-2 d-block"></i>
+                    <h6 class="mb-1" style="color: var(--text);">Upload Receipt Image</h6>
+                    <small class="text-muted d-block mb-3">JPG, PNG, PDF allowed</small>
+                    <input type="file" name="file" id="fileInput" required onchange="updateFileName(this)">
+                    <div id="fileNameDisplay" class="small fw-bold text-truncate" style="color: var(--accent);"></div>
+                </div>
+
+                <button type="button" onclick="magicAnalyze()" class="btn-magic w-100 mb-3" id="scanBtn">
+                    <i class="bi bi-stars me-2"></i> Magic AI Scan
+                </button>
+
+                <div id="aiWarning" class="alert p-3 mb-3 d-none" style="background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px; color: #f59e0b;">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <small class="fw-bold">Low Confidence Scan.</small><br>
+                    <small style="opacity: 0.8;">Please verify the extracted details before saving.</small>
+                </div>
+
+                <button type="submit" class="btn-grad-primary w-100 mt-2">Confirm & Save to Vault 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL: SAVED RECEIPTS GALLERY -->
+    <div class="right-col">
+        <div class="d-flex justify-content-between align-items-center mb-4 hide-on-mobile animate__animated animate__fadeInRight">
+            <h5 class="fw-bold mb-0">Vault Gallery</h5>
+            <span class="badge bg-secondary rounded-pill">{{ images|length }} Saved Receipts</span>
+        </div>
+        
+        <div class="row g-4 text-center">
+            {% for img in images %}
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                <div class="receipt-card">
+                    {% if img.attachment.lower().endswith('.pdf') %}
+                    <div class="d-flex align-items-center justify-content-center" style="height: 160px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--border);">
+                        <div class="text-danger flex-column d-flex align-items-center">
+                            <i class="bi bi-file-earmark-pdf-fill" style="font-size: 3rem;"></i>
+                            <span class="fw-bold mt-2 small text-uppercase">PDF Document</span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <img src="{{ url_for('static', filename='uploads/' + img.attachment) }}" class="receipt-image">
+                    {% endif %}
+                    
+                    <div class="p-3 text-start d-flex flex-column flex-grow-1">
+                        <small class="text-muted fw-bold text-uppercase" style="font-size: 10px; letter-spacing: 1px;">{{ img.category }}</small>
+                        <h6 class="fw-bold mb-1 text-truncate" title="{{ img.title }}">{{ img.title }}</h6>
+                        <h5 class="fw-900 mb-3" style="color: var(--accent);">₹{{ "{:,.2f}".format(img.amount) }}</h5>
+                        
+                        <div class="mt-auto d-flex gap-2">
+                            <button class="btn btn-sm w-50 fw-bold view-receipt-btn" 
+                                data-url="{{ url_for('static', filename='uploads/' + img.attachment) }}"
+                                data-title="{{ img.title }}"
+                                data-is-pdf="{% if img.attachment.lower().endswith('.pdf') %}true{% else %}false{% endif %}"
+                                style="background: rgba(var(--accent-rgb), 0.1); color: var(--accent); border: 1px solid rgba(var(--accent-rgb), 0.2);">
+                                <i class="bi bi-eye me-1"></i> View
+                            </button>
+                            <button onclick="confirmDeleteVault('{{ img.id }}', '{{ img.title }}')" class="btn btn-sm w-50 fw-bold" style="background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2);">
+                                <i class="bi bi-trash me-1"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-12 py-5 text-center animate__animated animate__fadeIn">
+                <i class="bi bi-inbox display-1 text-muted opacity-25 mb-3 d-block"></i>
+                <h5 class="fw-bold text-muted">Your vault is empty</h5>
+                <p class="text-muted small">Upload a receipt or invoice to get started.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Receipt Viewer Modal -->
+<div class="modal fade" id="receiptModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;">
+      <div class="modal-header border-bottom border-secondary border-opacity-25 py-3">
+        <h5 class="modal-title fw-bold" id="receiptModalLabel" style="color: var(--accent);">Receipt Viewer</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1) grayscale(100%) brightness(200%);"></button>
+      </div>
+      <div class="modal-body text-center p-0" id="receiptModalBody" style="background: #000; overflow: hidden; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
+        <!-- Embedded dynamically via JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    function openReceiptModal(fileUrl, title, isPdf) {
+        document.getElementById('receiptModalLabel').innerText = title;
+        const body = document.getElementById('receiptModalBody');
+        body.innerHTML = '';
+        
+        if (isPdf) {
+            body.innerHTML = `<iframe src="${fileUrl}" width="100%" height="600px" style="border:none;"></iframe>`;
+        } else {
+            body.innerHTML = `<img src="${fileUrl}" style="max-width: 100%; max-height: 75vh; object-fit: contain; margin: 0 auto; display: block;">`;
+        }
+        
+        const myModal = new bootstrap.Modal(document.getElementById('receiptModal'));
+        myModal.show();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.view-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                openReceiptModal(this.dataset.url, this.dataset.title, this.dataset.isPdf === 'true');
+            });
+        });
+    });
+
+    function updateFileName(input) {
+        const display = document.getElementById('fileNameDisplay');
+        if (input.files && input.files[0]) {
+            display.innerText = "📄 " + input.files[0].name;
+            document.getElementById('scanBtn').classList.add('animate__animated', 'animate__pulse', 'animate__infinite');
+        } else {
+            display.innerText = "";
+            document.getElementById('scanBtn').classList.remove('animate__animated', 'animate__pulse', 'animate__infinite');
+        }
+    }
+
+    async function magicAnalyze() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) {
+            Swal.fire({
+                title: 'No File Selected',
+                text: 'Please upload a receipt image (JPG/PNG) or PDF first.',
+                icon: 'warning',
+                background: 'var(--card-bg)',
+                color: 'var(--text)',
+                confirmButtonColor: 'var(--accent)'
+            });
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        const overlay = document.getElementById('loadingOverlay');
+        const scanBtn = document.getElementById('scanBtn');
+        overlay.style.display = 'flex';
+        scanBtn.classList.remove('animate__infinite');
+
+        try {
+            const res = await fetch('/api/receipt/analyze', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+
+            if (result.success) {
+                const data = result.data;
+
+                const titleField = document.getElementById('title');
+                const amountField = document.getElementById('amount');
+                const catField = document.getElementById('category');
+
+                titleField.value = data.merchant || "";
+                amountField.value = data.total_amount || 0;
+
+                let matched = false;
+                if (data.category) {
+                    for (let option of catField.options) {
+                        if (data.category.toLowerCase().includes(option.text.toLowerCase()) ||
+                            option.text.toLowerCase().includes(data.category.toLowerCase())) {
+                            catField.value = option.value;
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!matched && data.category) {
+                   catField.value = 'Others';
+                }
+
+                // Apply Neon Highlights
+                document.querySelectorAll('.form-control, .form-select').forEach(el => el.classList.add('ai-glow'));
+                document.querySelectorAll('.ai-badge').forEach(el => el.classList.remove('d-none'));
+
+                if (data.confidence_score !== undefined && data.confidence_score < 0.7) {
+                    document.getElementById('aiWarning').classList.remove('d-none');
+                } else {
+                    document.getElementById('aiWarning').classList.add('d-none');
+                }
+
+                // Toast success
+                Swal.mixin({
+                    toast: true, position: 'top-end', showConfirmButton: false, timer: 2000,
+                    background: 'var(--card-bg)', color: 'var(--text)'
+                }).fire({
+                    icon: 'success',
+                    title: 'Receipt parsed successfully!'
+                });
+
+                setTimeout(() => {
+                    document.querySelectorAll('.form-control, .form-select').forEach(el => el.classList.remove('ai-glow'));
+                }, 3000);
+
+            } else {
+                throw new Error(result.error || "Unknown parsing error");
+            }
+        } catch (e) {
+            console.error(e);
+            Swal.fire({
+                title: 'AI Scan Failed',
+                text: 'Could not extract data from this file. Please enter manually.',
+                icon: 'error',
+                background: 'var(--card-bg)',
+                color: 'var(--text)',
+                confirmButtonColor: 'var(--accent)'
+            });
+        } finally {
+            overlay.style.display = 'none';
+        }
+    }
+
+    function confirmDeleteVault(id, title) {
+        Swal.fire({
+            title: 'Delete Receipt?',
+            html: `Are you sure you want to remove <b>${title}</b> from the vault?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, Delete',
+            background: 'var(--card-bg)',
+            color: 'var(--text)',
+            confirmButtonColor: '#ef4444'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = "/delete/" + id;
+            }
+        });
+    }
+</script>
+{% endblock %}

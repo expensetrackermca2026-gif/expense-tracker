@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  /* ─── DASHBOARD REFINEMENTS ─────────────────────────── */
+  body { background: var(--bg) !important; color: var(--text) !important; }
+
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 24px;
+    align-items: start;
+    margin-top: 10px;
+  }
+  @media (max-width: 1100px) { .dash-grid { grid-template-columns: 1fr; } }
+
+  /* ─── KPI Cards Range ──────────────────────────────── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 768px) { .kpi-row { grid-template-columns: 1fr; } }
+
+  .kpi-card {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(.4,0,.2,1);
+  }
+  .kpi-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+    border-color: var(--accent);
+  }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: var(--accent); opacity: 0.8;
+  }
+
+  .kpi-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 10px;
+  }
+  .kpi-value { font-size: 28px; font-weight: 800; color: var(--text); line-height: 1; }
+
+  /* ─── Info Cards ─────────────────────────────────── */
+  .info-card {
+    background: var(--card-bg);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    margin-bottom: 24px;
+    transition: all 0.3s;
+  }
+  .info-card-header {
+    padding: 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .info-card-header h5 { font-size: 14px; font-weight: 700; color: var(--text); margin:0; text-transform:uppercase; letter-spacing: 0.5px; }
+  .info-card-body { padding: 20px; }
+
+  /* ─── Transactions Table ─────────────────────────── */
+  .tx-table { width: 100%; border-collapse: collapse; }
+  .tx-table tr { border-bottom: 1px solid var(--border); transition: background 0.2s; }
+  .tx-table tr:hover { background: rgba(var(--accent-rgb, 79, 142, 247), 0.05); }
+  .tx-table td { padding: 14px 8px; vertical-align: middle; }
+  .tx-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(128,128,128,0.1); display: grid; place-items: center; font-size: 18px; }
+  .tx-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .tx-cat { font-size: 11px; color: var(--text-muted); }
+  .tx-amount { font-size: 15px; font-weight: 700; text-align: right; }
+  .tx-amount.paid { color: #f97316; }
+  .tx-amount.received { color: #10b981; }
+
+  /* ─── Goal Progress ──────────────────────────────── */
+  .goal-bar-track { height: 10px; background: rgba(var(--accent-rgb, 79, 142, 247), 0.1); border-radius: 10px; margin-top: 14px; overflow: hidden; }
+  .goal-bar-fill { height: 100%; background: var(--accent); border-radius: 10px; transition: width 1s ease; box-shadow: 0 0 10px var(--accent-glow); }
+
+</style>
+
+<div class="dash-grid">
+  <!-- LEFT COLUMN -->
+  <div class="left-col">
+    <div class="animate__animated animate__fadeInDown mb-4">
+      <h1 class="h3 fw-800 mb-1">Welcome back, {{ user.full_name }}!</h1>
+      <p class="text-muted small">Managing your finances with Intelligence.</p>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Current Balance</div>
+        <div class="kpi-value">₹<span id="stat-balance">{{ "{:,.0f}".format(balance) }}</span></div>
+        <i class="bi bi-wallet2 position-absolute top-0 end-0 m-3 opacity-25" style="font-size:24px;"></i>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Monthly Savings</div>
+        <div class="kpi-value"><span id="stat-progress-val">{{ progress_percent|round|int }}</span>%</div>
+        <div class="goal-bar-track">
+          <div id="stat-progress-bar" class="goal-bar-fill" style="width: {{ progress_percent }}%"></div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Top Spending</div>
+        <div class="kpi-value" style="font-size:20px;">{{ top_category }}</div>
+        <i class="bi bi-fire position-absolute top-0 end-0 m-3 opacity-25" style="font-size:24px;"></i>
+      </div>
+    </div>
+
+    <!-- Main Charts -->
+    <div class="row g-4">
+      <div class="col-md-7">
+        <div class="info-card h-100">
+          <div class="info-card-header"><h5><i class="bi bi-graph-up me-2"></i>Spending Trend</h5></div>
+          <div class="info-card-body"><canvas id="trendChart" height="220"></canvas></div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="info-card h-100">
+          <div class="info-card-header"><h5><i class="bi bi-pie-chart me-2"></i>Distribution</h5></div>
+          <div class="info-card-body"><canvas id="pieChart" height="220"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="info-card mt-4">
+      <div class="info-card-header"><h5><i class="bi bi-receipt me-2"></i>Recent Transactions</h5></div>
+      <div class="info-card-body p-0">
+        <table class="tx-table">
+          {% for r in recent %}
+          <tr>
+            <td style="width:60px; padding-left:20px;">
+              <div class="tx-icon">{% if r.type=='Received' %}💰{% else %}💳{% endif %}</div>
+            </td>
+            <td>
+              <div class="tx-title">{{ r.title }}</div>
+              <div class="tx-cat">{{ r.category }}</div>
+            </td>
+            <td style="padding-right:20px;">
+              <div class="tx-amount {% if r.type=='Received' %}received{% else %}paid{% endif %}">
+                {% if r.type=='Received' %}+{% else %}−{% endif %}₹{{ "{:,.0f}".format(r.amount) }}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: AI Report -->
+  <div class="right-col">
+    <div class="info-card border-warning" style="background: linear-gradient(135deg, var(--card-bg), var(--panel-bg));">
+      <div class="info-card-header bg-transparent border-warning p-4">
+        <div style="width:48px;height:48px;border-radius:12px;background:var(--accent);display:grid;place-items:center;font-size:24px;box-shadow:0 0 15px var(--accent-glow);">🧙‍♂️</div>
+        <div class="ms-2">
+          <h5 class="text-warning mb-0" style="font-size:12px;letter-spacing:1.5px;">AI FINANCIAL ANALYSIS</h5>
+          <span class="text-muted small">{{ current_month_name }} Insights</span>
+        </div>
+      </div>
+      <div class="info-card-body p-4" id="ai-report-content" style="font-size:13px; line-height:1.7; color: var(--text-muted);">
+        {{ ai_insight | safe }}
+      </div>
+      <div class="px-4 pb-4">
+        <button class="btn btn-sm btn-outline-warning w-100" onclick="fcToggle()">Chat with AI Agent</button>
+      </div>
+    </div>
+    
+    <!-- Anomaly Warnings if any -->
+    {% if active_anomalies %}
+    <div class="alert alert-danger border-0 rounded-4 shadow-sm p-4 animate__animated animate__shakeX">
+      <h6 class="fw-bold mb-3"><i class="bi bi-exclamation-triangle-fill me-2"></i>Security Alerts</h6>
+      {% for a in active_anomalies %}
+      <div class="small mb-2">{{ a.reason }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  let charts = {};
+
+  function initCharts() {
+    const textColor = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
+    const gridColor = getComputedStyle(document.body).getPropertyValue('--border').trim();
+    const accentColor = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+
+    Chart.defaults.color = textColor;
+    Chart.defaults.font.family = "'Inter', sans-serif";
+
+    // Trend Chart
+    const trendCtx = document.getElementById('trendChart')?.getContext('2d');
+    if (trendCtx) {
+      if (charts.trend) charts.trend.destroy();
+      charts.trend = new Chart(trendCtx, {
+        type: 'line',
+        data: {
+          labels: {{ trend_labels|tojson|safe }},
+          datasets: [{
+            label: 'Spending',
+            data: {{ trend_values|tojson|safe }},
+            borderColor: accentColor,
+            backgroundColor: 'rgba(79, 142, 247, 0.1)',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 3,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { grid: { color: gridColor }, ticks: { maxTicksLimit: 5 } }
+          }
+        }
+      });
+    }
+
+    // Pie Chart
+    const pieCtx = document.getElementById('pieChart')?.getContext('2d');
+    if (pieCtx) {
+      if (charts.pie) charts.pie.destroy();
+      charts.pie = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+          labels: {{ pie_labels|tojson|safe }},
+          datasets: [{
+            data: {{ pie_values|tojson|safe }},
+            backgroundColor: ['#4f8ef7', '#10b981', '#f59e0b', '#ef4444', '#a78bfa', '#ec4899', '#14b8a6', '#f43f5e'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '70%',
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', initCharts);
+  
+  // Real-time theme change listener
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.attributeName === 'data-theme') {
+        setTimeout(initCharts, 100); // Slight delay for CSS vars to propagate
+      }
+    });
+  });
+  observer.observe(document.getElementById('htmlTag'), { attributes: true });
+
+</script>
+
+{% endblock %}

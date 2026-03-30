@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="midnight" id="htmlTag">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ExpenseAI — Smart Finance, Simplified</title>
+  <meta name="description" content="ExpenseAI is the intelligent SaaS finance platform for tracking expenses, saving smarter, and growing wealth with AI-powered insights.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  
+  <style>
+    /* ─── THEME SYSTEM ───────────────────────── */
+    :root {
+        --bg: #0d1117;
+        --text: #e2e8f0;
+        --text-muted: #64748b;
+        --nav-bg: rgba(13, 17, 23, 0.85);
+        --card-bg: #111827;
+        --accent: #4f8ef7;
+        --accent-glow: rgba(79, 142, 247, 0.5);
+        --border: rgba(255, 255, 255, 0.07);
+    }
+
+    [data-theme="emerald"] {
+        --bg: #06100c;
+        --text: #ecfdf5;
+        --text-muted: #94a3b8;
+        --nav-bg: rgba(6, 16, 12, 0.88);
+        --card-bg: #112a20;
+        --accent: #10b981;
+        --accent-glow: rgba(16, 185, 129, 0.5);
+        --border: rgba(16, 185, 129, 0.15);
+    }
+
+    [data-theme="sunset"] {
+        --bg: #100b0b;
+        --text: #fff7ed;
+        --text-muted: #94a3b8;
+        --nav-bg: rgba(16, 11, 11, 0.88);
+        --card-bg: #2d1b1b;
+        --accent: #f97316;
+        --accent-glow: rgba(249, 115, 22, 0.5);
+        --border: rgba(249, 115, 22, 0.15);
+    }
+
+    [data-theme="cyberpunk"] {
+        --bg: #050505;
+        --text: #fff;
+        --text-muted: #a1a1aa;
+        --nav-bg: rgba(5, 5, 5, 0.9);
+        --card-bg: #111;
+        --accent: #d946ef;
+        --accent-glow: rgba(217, 70, 239, 0.6);
+        --border: rgba(217, 70, 239, 0.3);
+    }
+
+    [data-theme="nordic"] {
+        --bg: #f8fafc;
+        --text: #0f172a;
+        --text-muted: #64748b;
+        --nav-bg: rgba(248, 250, 252, 0.9);
+        --card-bg: #ffffff;
+        --accent: #3b82f6;
+        --accent-glow: rgba(59, 130, 246, 0.3);
+        --border: rgba(0, 0, 0, 0.08);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { 
+        font-family: 'Inter', sans-serif; 
+        background: var(--bg); 
+        color: var(--text); 
+        -webkit-font-smoothing: antialiased; 
+        overflow-x: hidden;
+        transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    /* ─── Navbar ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 16px 40px;
+      background: var(--nav-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      transition: all 0.4s;
+    }
+    .nav-logo { font-size: 18px; font-weight: 800; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+    .nav-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+    .nav-logo .accent { color: var(--accent); }
+    
+    .nav-links { display: flex; align-items: center; gap: 28px; }
+    .nav-links a { color: var(--text-muted); font-size: 14px; font-weight: 600; text-decoration: none; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--accent); }
+
+    .nav-cta { display: flex; align-items: center; gap: 12px; }
+    .btn-ghost { background: none; border: 1px solid var(--border); color: var(--text); font-size: 13px; font-weight: 600; padding: 8px 20px; border-radius: 8px; cursor: pointer; text-decoration: none; transition: all 0.2s; }
+    .btn-ghost:hover { background: rgba(255,255,255,0.06); border-color: var(--accent); }
+    
+    .btn-primary-cta { background: var(--accent); border: none; color: white; font-size: 13px; font-weight: 700; padding: 10px 24px; border-radius: 8px; cursor: pointer; text-decoration: none; transition: all 0.2s; box-shadow: 0 4px 14px var(--accent-glow); }
+    .btn-primary-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow); }
+
+    .btn-theme-cycle {
+        background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+        color: var(--text); font-size: 16px; width: 40px; height: 40px; border-radius: 10px;
+        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ─── Hero ── */
+    .hero {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 120px 24px 80px;
+      position: relative; overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0; z-index: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, var(--accent-glow) 0%, transparent 70%);
+    }
+    h1 { font-size: clamp(36px, 6vw, 72px); font-weight: 900; line-height: 1.08; letter-spacing: -2px; margin-bottom: 22px; }
+    h1 .grad { background: linear-gradient(135deg, var(--accent), #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero-sub { font-size: clamp(16px, 2vw, 20px); color: var(--text-muted); line-height: 1.6; max-width: 560px; margin: 0 auto 40px; }
+
+    /* ─── Features Grid ── */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 1200px; margin: 0 auto; }
+    .feat-card {
+      background: var(--card-bg); border: 1px solid var(--border); border-radius: 20px;
+      padding: 32px; transition: all 0.3s;
+    }
+    .feat-card:hover { transform: translateY(-6px); border-color: var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+    .feat-icon { width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; margin-bottom: 20px; background: rgba(0,0,0,0.2); }
+    .feat-title { font-size: 17px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
+    .feat-desc { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+
+    @media(max-width:768px){
+      nav { padding: 14px 20px; }
+      .nav-links { display: none; }
+      .features-grid { grid-template-columns: 1fr; }
+    }
+
+    footer { padding: 60px 24px; background: var(--bg); border-top: 1px solid var(--border); text-align: center; }
+    .footer-text { color: var(--text-muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="/">
+    <span class="dot"></span>
+    Expense<span class="accent">AI</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="/login">Dashboard</a>
+  </div>
+  <div class="nav-cta">
+    <button class="btn-theme-cycle" onclick="cycleTheme()" id="themeBtn">🎨</button>
+    <a href="/login" class="btn-ghost">Sign In</a>
+    <a href="/signup" class="btn-primary-cta">Get Started Free</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div style="background:rgba(var(--accent-rgb),0.1); border:1px solid var(--border); color:var(--accent); font-size:12px; font-weight:700; padding:6px 16px; border-radius:99px; display:inline-block; margin-bottom:24px;">AI-POWERED FINANCE</div>
+    <h1>Your Money.<br><span class="grad">Finally Intelligent.</span></h1>
+    <p class="hero-sub">The state-of-the-art financial coach that lives in your browser. Real-time insights, automatic parsing, and smart savings.</p>
+    <div style="display:flex; gap:16px; justify-content:center;">
+       <a href="/signup" class="btn-primary-cta" style="padding:16px 40px; font-size:16px;">🚀 Unlock Your Free Account</a>
+    </div>
+  </div>
+</section>
+
+<section id="features" style="padding: 100px 24px;">
+    <h2 style="text-align:center; font-size:40px; font-weight:900; margin-bottom:16px;">Next-Gen Features</h2>
+    <p style="text-align:center; color:var(--text-muted); margin-bottom:60px;">Everything you need to master your financial destiny.</p>
+    <div class="features-grid">
+      <div class="feat-card">
+        <div class="feat-icon">🤖</div>
+        <div class="feat-title">FinCoach AI</div>
+        <div class="feat-desc">A professional financial assistant that knows your data. Ask anything, get grounded answers.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">📄</div>
+        <div class="feat-title">PDF Smart Parser</div>
+        <div class="feat-desc">Stop manual entry. Upload your bank statements and let AI categorize everything for you.</div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon">🐷</div>
+        <div class="feat-title">Smart Savings</div>
+        <div class="feat-desc">Automated budget frameworks like 50/30/20 tailored to your actual spending habits.</div>
+      </div>
+    </div>
+</section>
+
+<footer>
+    <div class="nav-logo" style="justify-content:center; margin-bottom:20px;">
+        <span class="dot"></span> Expense<span class="accent">AI</span>
+    </div>
+    <p class="footer-text">© 2026 ExpenseAI. The future of personal finance is here.</p>
+</footer>
+
+<script>
+    const themes = ['midnight', 'emerald', 'sunset', 'cyberpunk', 'nordic'];
+    const themeIcons = { 'midnight': '🌙', 'emerald': '🌲', 'sunset': '🌅', 'cyberpunk': '🧬', 'nordic': '❄️' };
+
+    function cycleTheme() {
+        const current = document.getElementById('htmlTag').getAttribute('data-theme') || 'midnight';
+        const nextIndex = (themes.indexOf(current) + 1) % themes.length;
+        setTheme(themes[nextIndex]);
+    }
+
+    function setTheme(name) {
+        document.getElementById('htmlTag').setAttribute('data-theme', name);
+        localStorage.setItem('user-theme', name);
+        document.getElementById('themeBtn').innerHTML = themeIcons[name] || '🎨';
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const saved = localStorage.getItem('user-theme') || 'midnight';
+        setTheme(saved);
+    });
+</script>
+
+</body>
+</html>

@@ -272,7 +272,6 @@
                 <a class="nav-link-item" href="/manual">Manual</a>
                 <a class="nav-link-item highlight-green" href="/parser">Parser ✨</a>
                 <a class="nav-link-item highlight-blue" href="/savings">Savings 🐷</a>
-                <a class="nav-link-item highlight-purple" href="/family">Family 🏠</a>
             </div>
 
             <div class="nav-actions">
@@ -301,10 +300,6 @@
             <a href="/savings" class="mobile-nav-item">
                 <i class="bi bi-piggy-bank-fill" style="color:#ef4444;"></i>
                 <span>Savings</span>
-            </a>
-            <a href="/family" class="mobile-nav-item">
-                <i class="bi bi-house-heart-fill" style="color:#a78bfa;"></i>
-                <span>Family</span>
             </a>
         </div>
     </nav>
@@ -438,7 +433,7 @@
   @keyframes fcMsgIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
   .fc-msg.bot{background:#1c2333;border:1px solid rgba(79,142,247,.12);color:#cbd5e1;border-radius:4px 14px 14px 14px;align-self:flex-start;}
   .fc-msg.user{background:linear-gradient(135deg,#4f8ef7,#818cf8);color:#fff;border-radius:14px 4px 14px 14px;align-self:flex-end;font-weight:500;}
-  .fc-msg.typing{background:#1c2333;border:1px solid rgba(79,142,247,.12);color:#4f8ef7;border-radius:4px 14px 14px 14px;align-self:flex-start;font-size:20px;letter-spacing:4px;padding:8px 14px;}
+  .fc-msg.typing{background:#1c2333;border:1px solid rgba(79,142,247,.12);color:#4f8ef7;border-radius:4px 14px 14px 14px;align-self:flex-start;font-size:11px;font-weight:600;padding:8px 14px;display:flex;align-items:center;gap:8px;}
 
   #fc-suggestions{padding:0 14px 10px;display:flex;flex-wrap:wrap;gap:6px;flex-shrink:0;}
   .fc-suggestion{background:rgba(79,142,247,.1);border:1px solid rgba(79,142,247,.22);color:#93c5fd;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;cursor:pointer;transition:background .15s,transform .15s;white-space:nowrap;}
@@ -516,7 +511,7 @@
 
     _fcAdd('user',msg);
     _fcHistory.push({role:'user',content:msg});
-    _fcTyping=_fcAdd('typing','\u25CF \u25CF \u25CF');
+    _fcTyping=_fcAdd('typing','<i class="bi bi-cpu animate-spin" style="font-size:14px;"></i> AI analyzing your financial data...');
 
     try{
       var r=await fetch('/api/fincoach/chat',{

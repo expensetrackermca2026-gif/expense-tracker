@@ -1,5 +1,8 @@
 import sys
 import os
+import platform
+platform.machine = lambda: 'AMD64'
+platform.win32_ver = lambda *args, **kwargs: ('10', '10.0', 'SP0', 'Multiprocessor Free')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from backend import create_app

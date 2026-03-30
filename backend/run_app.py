@@ -1,5 +1,8 @@
 import sys
 import os
+import platform
+platform.machine = lambda: 'AMD64'
+platform.win32_ver = lambda *args, **kwargs: ('10', '10.0', 'SP0', 'Multiprocessor Free')
 # Add the root directory to sys.path to resolve backend package
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

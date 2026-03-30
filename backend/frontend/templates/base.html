@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" data-theme="midnight" id="htmlTag">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ExpenseAI — Dashboard</title>
+    <meta name="description" content="AI-powered personal finance tracker.">
+
+    <!-- PWA & Mobile App Settings -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" id="themeMeta" content="#0d1117">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ExpenseAI">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap + Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+
+    <!-- JS libs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        /* ─── THEME SYSTEM ───────────────────────── */
+        :root {
+            /* Midnight (Default Dark) */
+            --bg: #0d1117;
+            --text: #e2e8f0;
+            --text-muted: #64748b;
+            --nav-bg: rgba(13, 17, 23, 0.92);
+            --card-bg: #1c2333;
+            --accent: #4f8ef7;
+            --accent-glow: rgba(79, 142, 247, 0.5);
+            --border: rgba(255, 255, 255, 0.07);
+            --input-bg: #0d1117;
+            --panel-bg: #161b22;
+        }
+
+        [data-theme="emerald"] {
+            --bg: #06100c;
+            --text: #ecfdf5;
+            --text-muted: #94a3b8;
+            --nav-bg: rgba(6, 16, 12, 0.94);
+            --card-bg: #112a20;
+            --accent: #10b981;
+            --accent-glow: rgba(16, 185, 129, 0.5);
+            --border: rgba(16, 185, 129, 0.15);
+            --input-bg: #06100c;
+            --panel-bg: #0d221a;
+        }
+
+        [data-theme="sunset"] {
+            --bg: #100b0b;
+            --text: #fff7ed;
+            --text-muted: #94a3b8;
+            --nav-bg: rgba(16, 11, 11, 0.94);
+            --card-bg: #2d1b1b;
+            --accent: #f97316;
+            --accent-glow: rgba(249, 115, 22, 0.5);
+            --border: rgba(249, 115, 22, 0.15);
+            --input-bg: #100b0b;
+            --panel-bg: #221515;
+        }
+
+        [data-theme="cyberpunk"] {
+            --bg: #050505;
+            --text: #fff;
+            --text-muted: #a1a1aa;
+            --nav-bg: rgba(5, 5, 5, 0.96);
+            --card-bg: #111;
+            --accent: #d946ef;
+            --accent-glow: rgba(217, 70, 239, 0.6);
+            --border: rgba(217, 70, 239, 0.3);
+            --input-bg: #000;
+            --panel-bg: #0a0a0a;
+        }
+
+        [data-theme="nordic"] {
+            --bg: #f8fafc;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --nav-bg: rgba(248, 250, 252, 0.94);
+            --card-bg: #ffffff;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+            --border: rgba(0, 0, 0, 0.08);
+            --input-bg: #f1f5f9;
+            --panel-bg: #ffffff;
+        }
+
+        /* ─── Global Reset & Typography ──────────── */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            transition: background 0.4s ease, color 0.4s ease;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* ─── Navbar ──────────────────────────────── */
+        .fintech-nav {
+            background: var(--nav-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.4s;
+        }
+
+        .fintech-nav .nav-inner {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-brand {
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--text);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.3px;
+        }
+
+        .nav-brand .brand-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .nav-brand .brand-accent {
+            color: var(--accent);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+            margin-left: 20px;
+        }
+
+        .nav-link-item {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 6px 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .nav-link-item:hover, .nav-link-item.active {
+            background: rgba(var(--accent-rgb, 79, 142, 247), 0.1);
+            color: var(--accent);
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        .btn-theme-cycle {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 14px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-theme-cycle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border-color: var(--accent);
+        }
+
+        .btn-logout {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: none;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        /* ─── Page Container ─────────────────────── */
+        .page-container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 24px 24px 48px;
+        }
+
+        /* ─── Cards ────────────────────────────── */
+        .dashboard-card {
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        /* ─── Mobile Bottom Nav ──────────────────── */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: var(--nav-bg);
+            backdrop-filter: blur(15px);
+            border-top: 1px solid var(--border);
+            z-index: 999;
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .mobile-nav-inner { display: flex; justify-content: space-around; height: 65px; }
+        .mobile-nav-item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: var(--text-muted); text-decoration: none; font-size: 10px; font-weight: 600; gap: 4px;
+            transition: color 0.2s;
+        }
+        .mobile-nav-item.active { color: var(--accent); }
+
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .mobile-bottom-nav { display: block; }
+            .page-container { padding-bottom: 90px; }
+            #fc-btn { bottom: 85px !important; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ── Navbar ──────────────────────────────── -->
+    <nav class="fintech-nav">
+        <div class="nav-inner">
+            <a class="nav-brand" href="/">
+                <span class="brand-dot"></span>
+                Expense<span class="brand-accent">AI</span>
+            </a>
+
+            <div class="nav-links">
+                <a class="nav-link-item" href="/">Dashboard</a>
+                <a class="nav-link-item" href="/manual">Manual</a>
+                <a class="nav-link-item" href="/parser">Parser ✨</a>
+                <a class="nav-link-item" href="/receipts">Vault 🛡️</a>
+                <a class="nav-link-item" href="/savings">Savings 🐷</a>
+            </div>
+
+            <div class="nav-actions">
+                <button class="btn-theme-cycle" onclick="cycleTheme()" id="themeBtn" title="Switch Theme">🎨</button>
+                <a class="nav-link-item" href="/profile" style="padding: 6px; font-size: 16px;" title="Profile">👤</a>
+                <a href="#" onclick="confirmLogout(event)" class="btn-logout"><i class="bi bi-box-arrow-right"></i></a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ── Mobile Bottom Nav ─────────────────── -->
+    <nav class="mobile-bottom-nav">
+        <div class="mobile-nav-inner">
+            <a href="/" class="mobile-nav-item active"><i class="bi bi-house-door-fill"></i><span>Home</span></a>
+            <a href="/manual" class="mobile-nav-item"><i class="bi bi-plus-circle-fill"></i><span>Add</span></a>
+            <a href="/parser" class="mobile-nav-item"><i class="bi bi-magic"></i><span>Parse</span></a>
+            <a href="/receipts" class="mobile-nav-item"><i class="bi bi-shield-lock-fill"></i><span>Vault</span></a>
+            <a href="/savings" class="mobile-nav-item"><i class="bi bi-piggy-bank-fill"></i><span>Savings</span></a>
+        </div>
+    </nav>
+
+    <!-- ── Flash Messages ───────────────────── -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <script>
+        Swal.fire({
+            title: 'Notification',
+            text: "{{ message }}",
+            icon: "{{ 'success' if category == 'success' else 'info' }}",
+            timer: 2500,
+            showConfirmButton: false,
+            background: 'var(--card-bg)',
+            color: 'var(--text)'
+        });
+    </script>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="page-container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        const themes = ['midnight', 'emerald', 'sunset', 'cyberpunk', 'nordic'];
+        const themeIcons = { 'midnight': '🌙', 'emerald': '🌲', 'sunset': '🌅', 'cyberpunk': '🧬', 'nordic': '❄️' };
+
+        function cycleTheme() {
+            const current = document.getElementById('htmlTag').getAttribute('data-theme') || 'midnight';
+            const nextIndex = (themes.indexOf(current) + 1) % themes.length;
+            setTheme(themes[nextIndex]);
+        }
+
+        function setTheme(name) {
+            const h = document.getElementById('htmlTag');
+            h.setAttribute('data-theme', name);
+            
+            // Sync with Bootstrap for components that check it
+            h.setAttribute('data-bs-theme', name === 'nordic' ? 'light' : 'dark');
+            
+            localStorage.setItem('user-theme', name);
+            document.getElementById('themeBtn').innerHTML = themeIcons[name] || '🎨';
+            
+            // Update mobile theme color
+            const meta = document.getElementById('themeMeta');
+            const colors = { 'midnight': '#0d1117', 'emerald': '#06100c', 'sunset': '#100b0b', 'cyberpunk': '#050505', 'nordic': '#f8fafc' };
+            if (meta) meta.setAttribute('content', colors[name] || '#0d1117');
+
+            // Dispatch global event for charts
+            window.dispatchEvent(new Event('themeChanged'));
+        }
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'user-theme') setTheme(e.newValue);
+        });
+
+        function confirmLogout(e) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Logging out?',
+                text: "You will be signed out of your session.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#334155',
+                confirmButtonText: 'Yes, Logout',
+                background: 'var(--card-bg)',
+                color: 'var(--text)'
+            }).then((result) => {
+                if (result.isConfirmed) window.location.href = "/logout";
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('user-theme') || 'midnight';
+            setTheme(saved);
+        });
+    </script>
+
+<!-- ════════════════════════════════════════════════ -->
+<!-- FINCOACH AI — Floating Chatbot Widget           -->
+<!-- ════════════════════════════════════════════════ -->
+<style>
+  #fc-btn {
+    position:fixed;bottom:28px;right:28px;
+    width:60px;height:60px;border-radius:18px;
+    background: var(--accent);
+    border:none;cursor:pointer;
+    box-shadow:0 6px 24px var(--accent-glow);
+    z-index:9999;display:flex;align-items:center;justify-content:center;
+    font-size:26px;transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  #fc-btn:hover{transform:scale(1.1) rotate(5deg);}
+  
+  #fc-panel{
+    position:fixed;bottom:100px;right:28px;
+    width:360px;max-height:600px;
+    background: var(--panel-bg);
+    border:1px solid var(--border);
+    border-radius:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    z-index:9998;display:none;flex-direction:column;overflow:hidden;
+    transition: all 0.3s;
+  }
+  #fc-panel.fc-open{ display:flex; animation: fcFadeIn 0.3s ease; }
+  @keyframes fcFadeIn { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+
+  .fc-header{
+    padding:16px;
+    background: var(--accent);
+    color: white;
+    display:flex;align-items:center;gap:12px;
+  }
+  .fc-avatar{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,0.2);display:grid;place-items:center;font-size:20px;}
+  .fc-header-info{flex:1;}
+  .fc-header-name{font-size:14px;font-weight:700;}
+  .fc-header-status{font-size:11px;opacity:0.9;display:flex;align-items:center;gap:4px;}
+  .fc-status-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;}
+
+  #fc-messages{flex:1;overflow-y:auto;padding:20px 16px;display:flex;flex-direction:column;gap:12px;}
+  .fc-msg{max-width:85%;padding:12px 16px;border-radius:18px;font-size:13px;line-height:1.5;}
+  .fc-msg.bot{background: var(--card-bg); border:1px solid var(--border); color: var(--text); align-self:flex-start; border-bottom-left-radius:4px;}
+  .fc-msg.user{background: var(--accent); color: white; align-self:flex-end; border-bottom-right-radius:4px; font-weight:500;}
+  
+  .fc-input-row{padding:16px;display:flex;gap:10px;background: var(--panel-bg); border-top:1px solid var(--border);}
+  #fc-input{flex:1;background: var(--input-bg); border:1px solid var(--border); border-radius:14px; color: var(--text); padding:10px 14px; outline:none; height:44px; resize:none;}
+  #fc-send{background: var(--accent); border:none; border-radius:12px; color: white; width:44px; height:44px; cursor:pointer;}
+</style>
+
+<button id="fc-btn" onclick="fcToggle()">&#129302;</button>
+
+<div id="fc-panel">
+  <div class="fc-header">
+    <div class="fc-avatar">&#129302;</div>
+    <div class="fc-header-info">
+      <div class="fc-header-name">FinCoach AI</div>
+      <div class="fc-header-status"><span class="fc-status-dot"></span> Active &middot; Smart Assistant</div>
+    </div>
+    <button style="background:transparent;border:none;color:white;font-size:18px;" onclick="fcToggle()">&#10005;</button>
+  </div>
+  <div id="fc-messages"></div>
+  <div class="fc-input-row">
+    <textarea id="fc-input" placeholder="How can I help you?..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();fcSend();}"></textarea>
+    <button id="fc-send" onclick="fcSend()">&#10148;</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var _hist=[];
+  var _open=false;
+  window.fcToggle=function(){
+    _open=!_open;
+    document.getElementById('fc-panel').classList.toggle('fc-open', _open);
+    if(_open && _hist.length===0) _add('bot', "Hello! I'm your FinCoach. How can I help you save more today?");
+  };
+  window.fcSend=async function(){
+    var i=document.getElementById('fc-input');
+    var m=i.value.trim(); if(!m)return; i.value='';
+    _add('user', m); _hist.push({role:'user',content:m});
+    var typ = _add('bot', 'AI is thinking...');
+    try {
+      var r=await fetch('/api/fincoach/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m,history:_hist.slice(0,-1)})});
+      var d=await r.json(); typ.remove();
+      _add('bot', d.reply); _hist.push({role:'model',content:d.reply});
+    } catch(e) { typ.innerHTML="⚠ Check your internet connection."; }
+  };
+  function _add(type,text){
+    var b=document.getElementById('fc-messages');
+    var el=document.createElement('div'); el.className='fc-msg '+type; el.innerText=text;
+    b.appendChild(el); b.scrollTop=b.scrollHeight; return el;
+  }
+})();
+</script>
+
+</body>
+</html>
