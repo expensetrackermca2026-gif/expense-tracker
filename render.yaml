@@ -7,7 +7,7 @@ services:
     name: expense-tracker-monolith
     env: python
     buildCommand: "./build.sh"
-    startCommand: "gunicorn backend.run_app:app"
+    startCommand: "gunicorn backend.wsgi:app"
     envVars:
       - key: PYTHON_VERSION
         value: 3.10.0
