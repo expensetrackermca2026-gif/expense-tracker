@@ -65,13 +65,19 @@ def index():
 
     # MODULE 4: PRODUCTION AI SPENDING INSIGHTS
     from ..models import AIReport, AnomalyWarning
+    import json as _json
     ai_report = AIReport.query.filter_by(user_id=user.id, year=now.year, month=now.month).first()
     
     # MODULE 6: ANOMALY DETECTION ALERTS
     active_anomalies = AnomalyWarning.query.filter_by(user_id=user.id, is_resolved=False).order_by(AnomalyWarning.created_at.desc()).all()
 
-    # Fallback for small advice if report not generated yet
-    ai_insight = ai_report.content if ai_report else "AI is analyzing your spending patterns... check back in a moment! 🤖"
+    # Parse the stored JSON report into a structured dict for the template
+    ai_data = None
+    if ai_report and ai_report.content:
+        try:
+            ai_data = _json.loads(ai_report.content)
+        except Exception:
+            ai_data = None  # malformed / old markdown report — will use fallback UI
 
     # Gather Chart Data
     cat_sum = db.session.query(Expense.category, func.sum(Expense.amount)).filter_by(user_id=user.id, type='Paid').filter(func.extract('year', Expense.expense_date) == now.year, func.extract('month', Expense.expense_date) == now.month).group_by(Expense.category).all()
@@ -93,7 +99,7 @@ def index():
                            balance=current_balance, recent=recent, goal_status=goal_status, 
                            savings_msg=savings_msg, progress_percent=progress_percent,
                            current_month_name=calendar.month_name[now.month],
-                           past_summaries=past_summaries, ai_insight=ai_insight,
+                           past_summaries=past_summaries, ai_data=ai_data,
                            active_anomalies=active_anomalies,
                            pie_labels=pie_labels, pie_values=pie_values,
                            trend_labels=trend_labels, trend_values=trend_values,

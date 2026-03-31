@@ -94,6 +94,19 @@ def runMonthlyEvaluation(user_id):
     prev = now.replace(day=1) - timedelta(days=1)
     calculateMonthlySummary(user_id, prev.year, prev.month)
 
+    # Trigger fresh AI report if the stored one is not valid JSON (old markdown format)
+    from .models import AIReport
+    rep = AIReport.query.filter_by(user_id=user_id, year=now.year, month=now.month).first()
+    needs_refresh = False
+    if rep and rep.content:
+        try:
+            import json as _j
+            _j.loads(rep.content)  # valid JSON = new format, skip refresh
+        except Exception:
+            needs_refresh = True  # old markdown format, regenerate
+    if not rep or needs_refresh:
+        generate_spending_insights(user_id, now.year, now.month)
+
 def generateMicroInvestmentPlan(savingsGoal):
     # Ensure savingsGoal is Decimal
     savingsGoal = Decimal(str(savingsGoal))
@@ -339,24 +352,57 @@ def generate_spending_insights(user_id, year, month):
         model = get_ai_model()
         if not model: return
 
-        prompt = f"""
-        Act as a Professional Fintech AI Coach.
-        Analyze this monthly spending data for a user:
-        Total Income: ₹{summary.total_income}
-        Total Spent: ₹{summary.total_expenses}
-        Savings Goal: ₹{summary.total_savings} (Net)
-        Category Breakdown: {json.dumps(cat_data)}
+        savings_rate = round((float(summary.total_savings) / float(summary.total_income) * 100), 1) if float(summary.total_income) > 0 else 0
+        top_cat = max(cat_data, key=cat_data.get) if cat_data else "N/A"
 
-        Return a human-readable report with:
-        1. Behavior Analysis
-        2. Savings Advice
-        3. Potential Warnings
-        4. Positive Reinforcement
-        Use bullet points and emojis. Keep it professional yet encouraging.
-        """
+        prompt = f"""You are a professional financial analyst AI. Analyze this user's monthly financial data and return ONLY a valid JSON object with no markdown, no code blocks, no extra text.
+
+DATA:
+- Income: {float(summary.total_income):.0f} INR
+- Spent: {float(summary.total_expenses):.0f} INR
+- Net Savings: {float(summary.total_savings):.0f} INR
+- Savings Rate: {savings_rate}%
+- Top Category: {top_cat}
+- Category Breakdown: {json.dumps(cat_data)}
+
+Return EXACTLY this JSON structure (fill in real values, keep each string under 120 chars):
+{{
+  "health_score": <integer 0-100 representing overall financial health>,
+  "health_label": "<one of: Excellent | Good | Needs Work | Critical>",
+  "behavior": {{
+    "title": "Spending Behavior",
+    "insight": "<1 sentence summary of spending pattern>",
+    "detail": "<1 sentence deeper observation>"
+  }},
+  "savings": {{
+    "title": "Savings Analysis",
+    "insight": "<1 sentence about current savings rate>",
+    "tip": "<1 actionable saving tip>"
+  }},
+  "focus": {{
+    "title": "Key Focus Area",
+    "category": "{top_cat}",
+    "insight": "<1 sentence about top spend category>",
+    "action": "<1 specific action to optimize this category>"
+  }},
+  "outlook": {{
+    "title": "Monthly Outlook",
+    "positive": "<1 encouraging observation>",
+    "next_step": "<1 concrete next financial step>"
+  }},
+  "quick_tips": ["<tip 1, max 60 chars>", "<tip 2, max 60 chars>", "<tip 3, max 60 chars>"]
+}}"""
         try:
-            report_text = model.generate_content(prompt).text
-            # Store it
+            raw = model.generate_content(prompt).text.strip()
+            # Strip markdown code fences if present
+            if raw.startswith('```'):
+                raw = raw.split('```')[1]
+                if raw.startswith('json'):
+                    raw = raw[4:]
+            raw = raw.strip().rstrip('`').strip()
+            # Validate it parses as JSON
+            parsed = json.loads(raw)
+            report_text = json.dumps(parsed)  # store clean JSON
             rep = AIReport.query.filter_by(user_id=user_id, year=year, month=month).first()
             if not rep:
                 rep = AIReport(user_id=user_id, year=year, month=month, type="MONTHLY_INSIGHT")
