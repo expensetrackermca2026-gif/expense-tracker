@@ -163,6 +163,7 @@ def _archive_parsed_transactions(u_id, new_filename, db_session):
             category=p.category,
         )
         db_session.add(arc_tx)
+        db_session.flush()
 
     # 4. Hard-delete active parsed expenses (clean slate)
     for p in existing_parsed:
@@ -297,6 +298,7 @@ def parser():
                         transaction_hash=t_hash,
                     )
                     db.session.add(new_e)
+                    db.session.flush()
                     count += 1
 
                 # ── PHASE 6: FINALISE & COMMIT ────────────────────
