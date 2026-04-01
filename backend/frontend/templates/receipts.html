@@ -10,7 +10,9 @@
         align-items: start;
         margin-top: 10px;
     }
-    @media (max-width: 900px) { .vault-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { 
+        .vault-grid { grid-template-columns: 1fr; } 
+    }
 
     /* Theme adaptive inputs */
     .form-control, .form-select {
@@ -213,7 +215,7 @@
         
         <div class="row g-4 text-center">
             {% for img in images %}
-            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+            <div class="col-md-6 col-lg-4 animate__animated animate__zoomIn" style="--delay: {{ loop.index0 * 0.05 }}s; animation-delay: var(--delay);">
                 <div class="receipt-card">
                     {% if img.attachment.lower().endswith('.pdf') %}
                     <div class="d-flex align-items-center justify-content-center" style="height: 160px; background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid var(--border);">
@@ -232,10 +234,12 @@
                         <h5 class="fw-900 mb-3" style="color: var(--accent);">₹{{ "{:,.2f}".format(img.amount) }}</h5>
                         
                         <div class="mt-auto d-flex gap-2">
-                            <button class="btn btn-sm w-50 fw-bold view-receipt-btn" 
+                            <button type="button" class="btn btn-sm w-50 fw-bold" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#receiptModal"
                                 data-url="{{ url_for('static', filename='uploads/' + img.attachment) }}"
                                 data-title="{{ img.title }}"
-                                data-is-pdf="{% if img.attachment.lower().endswith('.pdf') %}true{% else %}false{% endif %}"
+                                data-ispdf="{% if img.attachment.lower().endswith('.pdf') %}true{% else %}false{% endif %}"
                                 style="background: rgba(var(--accent-rgb), 0.1); color: var(--accent); border: 1px solid rgba(var(--accent-rgb), 0.2);">
                                 <i class="bi bi-eye me-1"></i> View
                             </button>
@@ -273,27 +277,26 @@
 </div>
 
 <script>
-    function openReceiptModal(fileUrl, title, isPdf) {
-        document.getElementById('receiptModalLabel').innerText = title;
-        const body = document.getElementById('receiptModalBody');
-        body.innerHTML = '';
-        
-        if (isPdf) {
-            body.innerHTML = `<iframe src="${fileUrl}" width="100%" height="600px" style="border:none;"></iframe>`;
-        } else {
-            body.innerHTML = `<img src="${fileUrl}" style="max-width: 100%; max-height: 75vh; object-fit: contain; margin: 0 auto; display: block;">`;
-        }
-        
-        const myModal = new bootstrap.Modal(document.getElementById('receiptModal'));
-        myModal.show();
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.view-receipt-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                openReceiptModal(this.dataset.url, this.dataset.title, this.dataset.isPdf === 'true');
+        const receiptModal = document.getElementById('receiptModal');
+        if (receiptModal) {
+            receiptModal.addEventListener('show.bs.modal', event => {
+                const button = event.relatedTarget;
+                const fileUrl = button.getAttribute('data-url');
+                const title = button.getAttribute('data-title');
+                const isPdf = button.getAttribute('data-ispdf') === 'true';
+
+                document.getElementById('receiptModalLabel').innerText = title;
+                const modalBody = document.getElementById('receiptModalBody');
+                modalBody.innerHTML = '';
+                
+                if (isPdf) {
+                    modalBody.innerHTML = `<iframe src="${fileUrl}" width="100%" height="600px" style="border:none;"></iframe>`;
+                } else {
+                    modalBody.innerHTML = `<img src="${fileUrl}" style="max-width: 100%; max-height: 75vh; object-fit: contain; margin: 0 auto; display: block;">`;
+                }
             });
-        });
+        }
     });
 
     function updateFileName(input) {
@@ -392,7 +395,7 @@
             console.error(e);
             Swal.fire({
                 title: 'AI Scan Failed',
-                text: 'Could not extract data from this file. Please enter manually.',
+                text: e.message && e.message !== "[object Object]" ? e.message : 'Could not extract data from this file. Please enter manually.',
                 icon: 'error',
                 background: 'var(--card-bg)',
                 color: 'var(--text)',
